@@ -1,0 +1,284 @@
+.nav-container {
+    max-width: 500px;
+    margin: 60px auto;
+    background: 23.png;
+    padding: 40px 30px;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    text-align: center;
+  }
+  .nav-container h1 {
+    color: #fafafb;
+    margin-bottom: 30px;
+  }
+  .nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .nav-links a {
+    display: block;
+    background: #07b9eb;
+    color: #fff;
+    text-decoration: none;
+    font-size: 1.2em;
+    padding: 15px 0;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+  .nav-links a:hover {
+    background: #19191b;
+  }
+  .logo {
+    height: 100px;
+    margin-bottom: 20px;
+  }
+  .dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  .dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #f9f9f9;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+  }
+  .dropdown:hover .dropdown-content {
+    display: block;
+  }
+  .category-btn {
+    margin: 5px;
+    padding: 8px 15px;
+    cursor: pointer;
+  }
+
+/* Add smooth transitions */
+body {
+  transition: background-image 0.5s ease-in-out;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+  
+  .logo {
+    height: 80px;
+    margin-right: 20px;
+  }
+  
+  header {
+    background-color: #ffffff;
+    color: #01030928;
+    padding: 15px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  header h1 {
+    margin: 0;
+    font-weight: 600;
+  }
+  
+  button {
+    background-color: #054b05;
+    border: none;
+    color: white;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.3s ease;
+  }
+  
+  button:hover {
+    background-color: #f0060607;
+  }
+  
+  main {
+    max-width: 960px;
+    margin: 30px auto;
+    background: rgb(255, 255, 255);
+    padding: 25px 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  }
+  
+  h1, h2 {
+    font-weight: 700;
+    color: #000000;
+  }
+  
+  .categories button {
+    margin-right: 10px;
+    margin-bottom: 15px;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+  
+  th, td {
+    border: 1px solid #ddd;
+    padding: 10px 12px;
+    text-align: left;
+  }
+  
+  th {
+    background-color: #ffffff;
+    font-weight: 600;
+  }
+  
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    margin: 8px 0 15px 0;
+    border: 1px solid #bebdbd;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  
+  form button {
+    width: auto;
+    margin-top: 0;
+  }
+  
+  .login-container {
+    max-width: 400px;
+    margin: 80px auto;
+    background: 23.png;
+    padding: 30px 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    text-align: center;
+  }
+  
+  .login-container .logo {
+    height: 120px;
+    margin-bottom: 20px;
+  }
+  
+  .login-container input {
+    margin-bottom: 15px;
+  }
+  
+  .login-container button {
+    width: 100%;
+  }
+  
+  #barcode-scanner {
+    margin-top: 15px;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  /* Scanner Input */
+.scanner-input {
+  position: relative;
+  margin: 15px 0;
+}
+
+.scanner-input input {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+}
+
+.scanner-status {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #4CAF50;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Sale Items */
+.sale-items-container {
+  margin: 20px 0;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.sale-item {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.sale-item:last-child {
+  border-bottom: none;
+}
+
+.sale-item span {
+  flex: 1;
+  margin: 0 5px;
+}
+
+.sale-item-quantity {
+  width: 60px;
+  padding: 5px;
+  text-align: center;
+}
+
+.remove-item {
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  cursor: pointer;
+}
+
+.sale-total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin: 15px 0;
+}
+
+.sale-total label {
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.sale-total input {
+  width: 150px;
+  padding: 8px;
+  font-size: 16px;
+  text-align: right;
+  font-weight: bold;
+}
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding-right: 40px; /* Give space for the icon */
+  box-sizing: border-box;
+}
+
+#togglePassword {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 18px;
+  z-index: 2; /* ensure it's above input */
+}

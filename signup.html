@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gaden Digitech - Signup</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <body class="signup"></body>
+  <div class="login-container">
+    <img src="22.png" alt="Gaden Logo" class="logo" />
+    <h1>Create an Account</h1>
+    <form id="signupForm">
+      <input type="email" id="email" placeholder="Email" required />
+      <div style="position:relative;">
+        <input type="password" id="password" placeholder="Password (min 6 chars)" required minlength="6" style="width:100%;" />
+        <button type="button" id="togglePassword" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer;">
+          <span id="eyeIcon">&#128065;</span>
+        </button>
+      </div>
+      <button type="submit">Sign Up</button>
+    </form>
+    <p>Already have an account? <a href="index.html">Login</a></p>
+  </div>
+
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyD2WZnOuDXBLXR7uAq_LTK46q7tr13Mqvw",
+      authDomain: "gadendigitech.firebaseapp.com",
+      projectId: "gadendigitech",
+      storageBucket: "gadendigitech.firebasestorage.app",
+      messagingSenderId: "134032321432",
+      appId: "1:134032321432:web:dedbb189a68980661259ed",
+      measurementId: "G-VLG9G3FCP0"
+    };
+  
+    // Initialize Firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+  
+    // Show/hide password toggle
+    const passwordInput = document.getElementById('password');
+    const togglePasswordBtn = document.getElementById('togglePassword');
+    const eyeIcon = document.getElementById('eyeIcon');
+    togglePasswordBtn.addEventListener('click', () => {
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        eyeIcon.textContent = '🙈';
+      } else {
+        passwordInput.type = 'password';
+        eyeIcon.textContent = '👁️';
+      }
+    });
+  
+    document.getElementById('signupForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = passwordInput.value;
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(() => {
+          alert('Account created! Please login.');
+          window.location = 'index.html';
+        })
+        .catch(err => alert(err.message));
+    });
+  </script>
+</body>
+</html>

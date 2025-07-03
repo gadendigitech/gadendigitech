@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gaden Digitech - Sales Management</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore-compat.js"></script>
+  <!-- PDFMake for receipts -->
+ <!-- pdfMake library -->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/pdfmake.min.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/vfs_fonts.js"></script>
+ 
+
+  <!-- QuaggaJS for barcode scanning -->
+  <script src="https://unpkg.com/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
+</head>
+<body>
+  <header>
+    <body class="sales"></body>
+    <img src="22.png" alt="Logo" class="logo" />
+    <h1>Sales Management</h1>
+    <button id="logoutBtn">Logout</button>
+  </header>
+
+  <main>
+<!-- Sales Form -->
+<section id="salesSection">
+  <h2>Record a Sale</h2>
+  <form id="salesForm">
+    <input type="date" id="saleDate" required />
+    <input type="text" id="clientName" placeholder="Client Name" required />
+    <input type="text" id="clientPhone" placeholder="Client Phone" />
+    
+    <div class="scanner-input">
+      <input type="text" id="saleBarcode" placeholder="Scan Barcode" required 
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <div class="scanner-status">Ready to scan</div>
+    </div>
+    
+    <div id="saleItemsContainer" class="sale-items-container">
+      <!-- Scanned items will appear here -->
+    </div>
+    
+    <div class="sale-total">
+      <label>Total Amount:</label>
+      <input type="number" id="saleTotal" readonly />
+    </div>
+    
+    <select id="saleType" required>
+      <option value="cash">Cash Sale</option>
+      <option value="credit">Credit Sale</option>
+    </select>
+    
+    <button type="submit">Complete Sale</button>
+  </form>
+</section>
+    <!-- Sales Records Table -->
+    <section id="salesRecordsSection">
+      <h2>Sales Records</h2>
+      <div class="date-range-filter">
+        <label>From: <input type="date" id="filterSalesFromDate" /></label>
+        <label>To: <input type="date" id="filterSalesToDate" /></label>
+        <button id="filterSalesBtn">View Sales</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Client</th>
+            <th>Phone</th>
+            <th>Item</th>
+            <th>Barcode</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Total Amount</th>
+            <th>Receipt</th>
+          </tr>
+        </thead>
+        <tbody id="salesRecordsTableBody"></tbody>
+      </table>
+      <form id="groupReceiptForm">
+        <input type="text" id="receipt-client" placeholder="Client Name" required />
+        <input type="date" id="receipt-date" required />
+        <button type="submit">Print Group Receipt</button>
+      </form>
+      
+    </section>
+
+    <!-- Credit Sales Section -->
+    <section id="creditSalesSection">
+      <h2>Credit Sales</h2>
+      <div class="date-range-filter">
+        <label>From: <input type="date" id="filterCreditsFromDate" /></label>
+        <label>To: <input type="date" id="filterCreditsToDate" /></label>
+        <button id="filterCreditsBtn">View Credits</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Client</th>
+            <th>Phone</th>
+            <th>Product</th>
+            <th>Quantity</th>
+            <th>Credit Amount (KSH)</th>
+            <th>Amount Paid (KSH)</th>
+            <th>Balance (KSH)</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="creditSalesTableBody"></tbody>
+      </table>
+    </section>
+
+    <!-- Profit & Loss Section -->
+    <section id="profitLossSection">
+      <h2>Profit & Loss Summary</h2>
+      <p>Total Sales: <span id="totalSales">0</span> KSH</p>
+      <p>Total Cost: <span id="totalCost">0</span> KSH</p>
+      <p><strong>Profit: <span id="profit">0</span> KSH</strong></p>
+    </section>
+
+    <!-- Barcode Scanner Section -->
+    <section id="barcodeScannerSection">
+      <h2>Barcode Scanner</h2>
+      <div id="barcode-scanner" style="width:320px; height:240px; background:#eee;"></div>
+      <button onclick="startScanner()">Start Scanner</button>
+      <button onclick="stopScanner()">Stop Scanner</button>
+      <p>Scanned Barcode: <span id="scannedBarcode"></span></p>
+    </section>
+    
+  </main>
+  <script src="background.js"></script>
+  <script src="sales.js"></script>
+</body>
+</html>
