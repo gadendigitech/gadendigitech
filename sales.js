@@ -31,8 +31,42 @@ auth.onAuthStateChanged(user => {
     loadSalesRecords();
     loadCreditSales();
     calculateProfit();
-    document.getElementById('saleDate').valueAsDate = new Date(); // Set default date
+    document.getElementById('saleDate').valueAsDate = new Date();
     document.getElementById('saleBarcode').focus();
+
+    // Show/hide due date and initial payment inputs based on sale type
+    const saleTypeSelect = document.getElementById('saleType');
+    const dueDateInput = document.getElementById('dueDate');
+    const dueDateLabel = document.getElementById('dueDateLabel');
+    const initialPaymentInput = document.getElementById('initialPayment');
+    const initialPaymentLabel = document.getElementById('initialPaymentLabel');
+
+    function toggleCreditFields() {
+      if (saleTypeSelect.value === 'credit') {
+        dueDateInput.style.display = 'inline-block';
+        dueDateLabel.style.display = 'inline-block';
+        initialPaymentInput.style.display = 'inline-block';
+        initialPaymentLabel.style.display = 'inline-block';
+
+        // Default due date 30 days from today
+        const today = new Date();
+        const due = new Date(today.setDate(today.getDate() + 30));
+        dueDateInput.valueAsDate = due;
+
+        initialPaymentInput.value = '';
+      } else {
+        dueDateInput.style.display = 'none';
+        dueDateLabel.style.display = 'none';
+        initialPaymentInput.style.display = 'none';
+        initialPaymentLabel.style.display = 'none';
+
+        dueDateInput.value = '';
+        initialPaymentInput.value = '';
+      }
+    }
+
+    saleTypeSelect.addEventListener('change', toggleCreditFields);
+    toggleCreditFields(); // initialize on load
 
     // Setup grouped receipt print button handler if form exists
     const groupReceiptForm = document.getElementById('groupReceiptForm');
@@ -59,11 +93,11 @@ auth.onAuthStateChanged(user => {
           salesSnapshot.forEach(doc => {
             const sale = doc.data();
             items.push({
-              sold: sale.itemSold || '',
-              description: sale.description || '',
-              partNumber: sale.partNumber || '',
-              quantity: sale.quantitySold || 0,
-              price: sale.price || (sale.amount / sale.quantitySold) || 0
+              itemName: sale.itemName || '',
+              category: sale.category || '',
+              barcode: sale.barcode || '',
+              quantity: sale.quantity || 0,
+              price: sale.sellingPrice || (sale.amount / sale.quantity) || 0
             });
             if (!clientPhone && sale.clientPhone) clientPhone = sale.clientPhone;
           });
@@ -88,6 +122,10 @@ auth.onAuthStateChanged(user => {
         }
       });
     }
+
+    // Add filter button listeners
+    document.getElementById('filterSalesBtn').addEventListener('click', loadSalesRecords);
+    document.getElementById('filterCreditsBtn').addEventListener('click', loadCreditSales);
   }
 });
 
@@ -106,17 +144,14 @@ async function loadProducts() {
 // Setup USB barcode scanner handler
 function setupBarcodeScanner() {
   const barcodeInput = document.getElementById('saleBarcode');
-  
   barcodeInput.addEventListener('keydown', function(e) {
     clearTimeout(barcodeTimeout);
-    
     if (e.key === 'Enter') {
       e.preventDefault();
       processScannedBarcode(barcodeInputBuffer.trim());
       barcodeInputBuffer = '';
       return;
     }
-    
     if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
       barcodeInputBuffer += e.key;
       barcodeTimeout = setTimeout(() => barcodeInputBuffer = '', BARCODE_DELAY);
@@ -127,17 +162,14 @@ function setupBarcodeScanner() {
 // Process scanned barcode
 async function processScannedBarcode(barcode) {
   if (!barcode) return;
-  
   const product = products.find(p => p.barcode === barcode);
   const barcodeInput = document.getElementById('saleBarcode');
-  
   if (product) {
     const existingItemIndex = currentSaleItems.findIndex(item => item.barcode === barcode);
-    
     if (existingItemIndex >= 0) {
       if (currentSaleItems[existingItemIndex].quantity < currentSaleItems[existingItemIndex].stockQty) {
         currentSaleItems[existingItemIndex].quantity++;
-        currentSaleItems[existingItemIndex].total = 
+        currentSaleItems[existingItemIndex].total =
           currentSaleItems[existingItemIndex].quantity * currentSaleItems[existingItemIndex].sellingPrice;
       } else {
         alert(`Only ${currentSaleItems[existingItemIndex].stockQty} available in stock!`);
@@ -149,11 +181,9 @@ async function processScannedBarcode(barcode) {
         total: product.sellingPrice
       });
     }
-    
     barcodeInput.value = '';
     updateSaleSummary();
     playSound('success');
-    
     const quantityInputs = document.querySelectorAll('.sale-item-quantity');
     if (quantityInputs.length > 0) {
       quantityInputs[quantityInputs.length - 1].focus();
@@ -170,43 +200,57 @@ async function processScannedBarcode(barcode) {
 function updateSaleSummary() {
   const summaryContainer = document.getElementById('saleItemsContainer');
   summaryContainer.innerHTML = '';
-  
   currentSaleItems.forEach((item, index) => {
     const itemElement = document.createElement('div');
     itemElement.className = 'sale-item';
     itemElement.innerHTML = `
       <span>${item.itemName} (${item.barcode})</span>
-      <input type="number" class="sale-item-quantity" value="${item.quantity}" 
+      <input type="number" class="sale-item-quantity" value="${item.quantity}"
              min="1" max="${item.stockQty}" data-index="${index}">
-      <span>@ ${item.sellingPrice.toFixed(2)}</span>
-      <span>= ${item.total.toFixed(2)}</span>
+      <input type="number" class="sale-item-price" value="${item.sellingPrice.toFixed(2)}"
+             min="0" step="0.01" data-index="${index}" style="width:60px;" />
+      <span>= <span class="sale-item-total">${item.total.toFixed(2)}</span></span>
       <button class="remove-item" data-index="${index}">×</button>
     `;
     summaryContainer.appendChild(itemElement);
   });
-  
+
+  // Quantity change
   document.querySelectorAll('.sale-item-quantity').forEach(input => {
     input.addEventListener('change', (e) => {
       const index = parseInt(e.target.dataset.index);
       const newQuantity = parseInt(e.target.value);
-      
       if (newQuantity > currentSaleItems[index].stockQty) {
         alert(`Only ${currentSaleItems[index].stockQty} available in stock!`);
         e.target.value = currentSaleItems[index].stockQty;
         return;
       }
-      
       if (newQuantity < 1) {
         e.target.value = 1;
         return;
       }
-      
       currentSaleItems[index].quantity = newQuantity;
       currentSaleItems[index].total = newQuantity * currentSaleItems[index].sellingPrice;
       updateSaleSummary();
     });
   });
-  
+
+  // Price change
+  document.querySelectorAll('.sale-item-price').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const index = parseInt(e.target.dataset.index);
+      const newPrice = parseFloat(e.target.value);
+      if (isNaN(newPrice) || newPrice < 0) {
+        e.target.value = currentSaleItems[index].sellingPrice.toFixed(2);
+        return;
+      }
+      currentSaleItems[index].sellingPrice = newPrice;
+      currentSaleItems[index].total = currentSaleItems[index].quantity * newPrice;
+      updateSaleSummary();
+    });
+  });
+
+  // Remove item
   document.querySelectorAll('.remove-item').forEach(button => {
     button.addEventListener('click', (e) => {
       const index = parseInt(e.target.dataset.index);
@@ -214,62 +258,123 @@ function updateSaleSummary() {
       updateSaleSummary();
     });
   });
-  
+
   const subtotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
   document.getElementById('saleTotal').value = subtotal.toFixed(2);
+
+  // Allow manual total edit (optional, but not recommended)
+  document.getElementById('saleTotal').addEventListener('change', function(e) {
+    const newTotal = parseFloat(e.target.value);
+    if (!isNaN(newTotal) && currentSaleItems.length > 0) {
+      const subtotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
+      const diff = newTotal - subtotal;
+      let lastItem = currentSaleItems[currentSaleItems.length - 1];
+      lastItem.sellingPrice += diff / lastItem.quantity;
+      lastItem.total = lastItem.quantity * lastItem.sellingPrice;
+      updateSaleSummary();
+    }
+  });
 }
 
 // Setup sales form submission
 function setupSalesForm() {
   document.getElementById('salesForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     if (currentSaleItems.length === 0) {
       alert('Please scan at least one item!');
       return;
     }
-    
+
     const date = document.getElementById('saleDate').value;
     const clientName = document.getElementById('clientName').value.trim();
     const clientPhone = document.getElementById('clientPhone').value.trim();
     const saleType = document.getElementById('saleType').value;
-    
+    const dueDate = document.getElementById('dueDate').value;
+    let initialPayment = parseFloat(document.getElementById('initialPayment').value);
+    if (isNaN(initialPayment) || initialPayment < 0) initialPayment = 0;
+
     if (!date || !clientName) {
       alert('Please fill all required fields!');
       return;
     }
-    
+
+    if (saleType === 'credit' && !dueDate) {
+      alert('Please select a due date for the credit sale.');
+      return;
+    }
+
     try {
       const batch = db.batch();
-      const salesRef = db.collection('sales');
       const stockRef = db.collection('stockmgt');
-      
-      currentSaleItems.forEach(item => {
-        const newSaleRef = salesRef.doc();
-        batch.set(newSaleRef, {
-          date,
-          clientName,
-          clientPhone,
-          barcode: item.barcode,
-          itemName: item.itemName,
-          quantity: item.quantity,
-          costPrice: item.costPrice,
-          sellingPrice: item.sellingPrice,
-          totalCost: item.costPrice * item.quantity,
-          totalSale: item.total,
-          saleType,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+
+      if (saleType === 'credit') {
+        const creditSalesRef = db.collection('creditSales');
+
+        for (const item of currentSaleItems) {
+          const creditAmount = item.total;
+          if (initialPayment > creditAmount) {
+            alert('Initial payment cannot exceed total credit amount.');
+            return;
+          }
+          const balance = creditAmount - initialPayment;
+          const newCreditSaleRef = creditSalesRef.doc();
+
+          batch.set(newCreditSaleRef, {
+            date,
+            clientName,
+            clientPhone,
+            barcode: item.barcode,
+            itemName: item.itemName,
+            quantity: item.quantity,
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+            totalCost: item.costPrice * item.quantity,
+            creditAmount,
+            amountPaid: initialPayment,
+            balance,
+            dueDate,
+            status: balance <= 0 ? 'Paid' : 'Pending',
+            category: item.category || '',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          const itemRef = stockRef.doc(item.id);
+          batch.update(itemRef, {
+            stockQty: firebase.firestore.FieldValue.increment(-item.quantity)
+          });
+        }
+      } else {
+        const salesRef = db.collection('sales');
+
+        currentSaleItems.forEach(item => {
+          const newSaleRef = salesRef.doc();
+          batch.set(newSaleRef, {
+            date,
+            clientName,
+            clientPhone,
+            barcode: item.barcode,
+            itemName: item.itemName,
+            quantity: item.quantity,
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+            totalCost: item.costPrice * item.quantity,
+            totalSale: item.total,
+            saleType,
+            category: item.category || '',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          const itemRef = stockRef.doc(item.id);
+          batch.update(itemRef, {
+            stockQty: firebase.firestore.FieldValue.increment(-item.quantity)
+          });
         });
-        
-        const itemRef = stockRef.doc(item.id);
-        batch.update(itemRef, {
-          stockQty: firebase.firestore.FieldValue.increment(-item.quantity)
-        });
-      });
-      
+      }
+
       await batch.commit();
-      
-      alert('Sale completed successfully!');
+
+      alert(`${saleType === 'credit' ? 'Credit sale' : 'Sale'} completed successfully!`);
       playSound('success');
 
       currentSaleItems = [];
@@ -280,7 +385,9 @@ function setupSalesForm() {
 
       loadProducts();
       loadSalesRecords();
+      loadCreditSales();
       calculateProfit();
+
     } catch (error) {
       console.error('Error processing sale:', error);
       alert('Error processing sale. Check console for details.');
@@ -292,7 +399,7 @@ function setupSalesForm() {
 // Play sound feedback
 function playSound(type) {
   const audio = new Audio();
-  audio.src = type === 'success' ? 
+  audio.src = type === 'success' ?
     'https://assets.mixkit.co/sfx/preview/mixkit-cash-register-purchase-2759.mp3' :
     'https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-688.mp3';
   audio.play();
@@ -304,7 +411,6 @@ async function loadSalesRecords() {
   const fromDate = document.getElementById('filterSalesFromDate')?.value;
   const toDate = document.getElementById('filterSalesToDate')?.value;
   let query = db.collection('sales').orderBy('timestamp', 'desc');
-  
   if (fromDate && toDate) {
     const startDate = new Date(fromDate);
     const endDate = new Date(toDate);
@@ -318,10 +424,8 @@ async function loadSalesRecords() {
     endDate.setDate(endDate.getDate() + 1);
     query = query.where('timestamp', '<=', endDate);
   }
-  
   const snapshot = await query.get();
   tbody.innerHTML = '';
-  
   snapshot.forEach(doc => {
     const sale = doc.data();
     const tr = document.createElement('tr');
@@ -331,6 +435,7 @@ async function loadSalesRecords() {
       <td>${sale.clientPhone}</td>
       <td>${sale.itemName}</td>
       <td>${sale.barcode}</td>
+      <td>${sale.category || ''}</td>
       <td>${sale.quantity}</td>
       <td>${sale.sellingPrice.toFixed(2)}</td>
       <td>${sale.totalSale.toFixed(2)}</td>
@@ -346,7 +451,6 @@ async function loadCreditSales() {
   const fromDate = document.getElementById('filterCreditsFromDate')?.value;
   const toDate = document.getElementById('filterCreditsToDate')?.value;
   let query = db.collection('creditSales').orderBy('timestamp', 'desc');
-  
   if (fromDate && toDate) {
     const startDate = new Date(fromDate);
     const endDate = new Date(toDate);
@@ -360,25 +464,24 @@ async function loadCreditSales() {
     endDate.setDate(endDate.getDate() + 1);
     query = query.where('timestamp', '<=', endDate);
   }
-  
   const snapshot = await query.get();
   const tbody = document.getElementById('creditSalesTableBody');
   tbody.innerHTML = '';
-  
   snapshot.forEach(doc => {
     const sale = doc.data();
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${sale.date}</td>
-      <td>${sale.clientName}</td>
-      <td>${sale.clientPhone}</td>
-      <td>${sale.itemName}</td>
-      <td>${sale.quantity}</td>
-      <td>${sale.creditAmount.toFixed(2)}</td>
-      <td>${sale.amountPaid.toFixed(2)}</td>
-      <td>${sale.balance.toFixed(2)}</td>
+      <td>${sale.date || ''}</td>
+      <td>${sale.clientName || ''}</td>
+      <td>${sale.clientPhone || ''}</td>
+      <td>${sale.category || ''}</td>
+      <td>${sale.itemName || ''}</td>
+      <td>${sale.quantity || ''}</td>
+      <td>${sale.creditAmount ? sale.creditAmount.toFixed(2) : ''}</td>
+      <td>${sale.amountPaid ? sale.amountPaid.toFixed(2) : ''}</td>
+      <td>${sale.balance ? sale.balance.toFixed(2) : ''}</td>
       <td>${sale.dueDate || 'N/A'}</td>
-      <td>${sale.status}</td>
+      <td>${sale.status || ''}</td>
       <td>
         <button onclick="payCredit('${doc.id}')">Pay</button>
         <button onclick="deleteCredit('${doc.id}')">Delete</button>
@@ -393,42 +496,34 @@ window.loadCreditSales = loadCreditSales;
 async function payCredit(id) {
   const paymentStr = prompt('Enter payment amount:');
   const payment = parseFloat(paymentStr);
-  
   if (isNaN(payment)) {
     alert('Please enter a valid number');
     return;
   }
-  
   if (payment <= 0) {
     alert('Payment amount must be positive');
     return;
   }
-  
   const docRef = db.collection('creditSales').doc(id);
   const docSnap = await docRef.get();
-  
   if (!docSnap.exists) {
     alert('Credit sale not found');
     return;
   }
-  
   const data = docSnap.data();
   const newAmountPaid = (data.amountPaid || 0) + payment;
   const newBalance = (data.balance || 0) - payment;
-  
   if (newBalance < 0) {
     alert('Payment exceeds balance');
     return;
   }
   const newStatus = newBalance <= 0 ? 'Paid' : 'Partial';
-  
   await docRef.update({
     amountPaid: newAmountPaid,
     balance: newBalance,
     status: newStatus,
     lastPaymentDate: new Date().toISOString().split('T')[0]
   });
-  
   alert('Payment recorded');
   loadCreditSales();
   calculateProfit();
@@ -449,29 +544,23 @@ window.deleteCredit = deleteCredit;
 async function calculateProfit() {
   const salesSnap = await db.collection('sales').get();
   const creditSnap = await db.collection('creditSales').get();
-  
   let totalSales = 0;
   let totalCost = 0;
   let totalProfit = 0;
-  
   salesSnap.forEach(doc => {
     const sale = doc.data();
     totalSales += sale.totalSale || 0;
     totalCost += sale.totalCost || 0;
   });
-  
   creditSnap.forEach(doc => {
     const credit = doc.data();
     totalSales += credit.amountPaid || 0;
     totalCost += (credit.costPrice * credit.quantity) || 0;
   });
-  
   totalProfit = totalSales - totalCost;
-  
   document.getElementById('totalSales').textContent = totalSales.toFixed(2);
   document.getElementById('totalCost').textContent = totalCost.toFixed(2);
   document.getElementById('profit').textContent = totalProfit.toFixed(2);
-  
   const profitElement = document.getElementById('profit');
   profitElement.style.color = totalProfit >= 0 ? 'green' : 'red';
 }
@@ -483,33 +572,27 @@ function generateGroupReceipt(sale) {
     const date = new Date(dateStr);
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
   };
-
   const formatCurrency = (amount) => parseFloat(amount).toFixed(2);
-
   let subtotal = 0;
   const itemsBody = [
-    ['Item', 'Barcode', 'Qty', 'Price']
+    ['Item','Category', 'Barcode', 'Qty', 'Price']
   ];
-
   sale.items.forEach(item => {
     subtotal += item.price * item.quantity;
     itemsBody.push([
-      { text: item || '', fontSize: 5, margin: [0, 0, 0, 0] },
-      { text: item.barcode|| '', fontSize: 5, margin: [0, 0, 0, 0] },
+      { text: item.itemName || '', fontSize: 5, margin: [0, 0, 0, 0] },
+      { text: item.category || '', fontSize: 5, margin: [0, 0, 0, 0] },
+      { text: item.barcode || '', fontSize: 5, margin: [0, 0, 0, 0] },
       { text: item.quantity.toString(), fontSize: 5, alignment: 'center', margin: [0, 0, 0, 0] },
       { text: formatCurrency(item.price), fontSize: 5, alignment: 'right', margin: [0, 0, 0, 0] }
     ]);
   });
-
   const vat = subtotal * 0.16;
   const total = subtotal + vat;
   const cash = sale.cash !== undefined ? sale.cash : total;
   const change = (cash - total) > 0 ? (cash - total) : 0;
-  const bankCard = sale.bankCard || "";
-  const approvalCode = sale.approvalCode || "";
-
   const docDefinition = {
-    pageSize: { width: 227, height: 'auto' }, // ~80mm width
+    pageSize: { width: 227, height: 'auto' },
     pageMargins: [10, 10, 10, 10],
     content: [
       { text: 'Gaden Digitech Ltd', style: 'header' },
@@ -521,7 +604,7 @@ function generateGroupReceipt(sale) {
       { text: '\n' },
       {
         table: {
-          widths: [60, '*', 50, 30, 40],
+          widths: [60, 40, '*', 50, 30],
           body: itemsBody
         },
         layout: 'noBorders'
@@ -553,7 +636,6 @@ function generateGroupReceipt(sale) {
     },
     images: {}
   };
-
   pdfMake.createPdf(docDefinition).print();
 }
 
