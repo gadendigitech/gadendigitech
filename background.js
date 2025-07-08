@@ -63,7 +63,7 @@ const pageBackgrounds = {
           document.body.style.backgroundImage = `url('${pageBackgrounds[currentPage][currentBg]}')`;
           document.body.style.opacity = '1';
         }, 500);
-      }, 45000);
+      }, 1030000);
     });
   }
   
