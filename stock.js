@@ -23,6 +23,9 @@ let barcodeInputBuffer = '';
 let barcodeTimeout;
 const BARCODE_DELAY = 50;
 
+let scannedBarcodes = []; // For multi-barcode input in add/edit product form
+let multiProductList = []; // For multi-product entry list
+
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => {
   auth.onAuthStateChanged(async user => {
@@ -59,7 +62,7 @@ async function migrateToBarcodeArray() {
   if (!snapshot.empty) {
     const fullSnapshot = await db.collection('stockmgt').get();
     const batch = db.batch();
-    
+
     fullSnapshot.forEach(doc => {
       const data = doc.data();
       if (!data.barcodes) {
@@ -69,7 +72,7 @@ async function migrateToBarcodeArray() {
         });
       }
     });
-    
+
     await batch.commit();
     console.log(`Migrated ${fullSnapshot.size} products`);
   }
@@ -79,22 +82,22 @@ function generateFallbackBarcode(id) {
   return `TEMP-${id.substring(0, 8)}`;
 }
 
-// ==================== MAIN FUNCTIONS ====================
+// ==================== UI SETUP ====================
 function setupUI() {
   // Category buttons
   document.querySelectorAll('.category-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', e => {
       currentCategory = e.target.dataset.category || e.target.textContent.trim();
       currentSubcategory = null;
-      loadStock().catch(e => console.error("Category load failed:", e));
+      loadStock().catch(console.error);
     });
   });
 
   // Subcategory buttons
   document.querySelectorAll('.subcategory-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', e => {
       currentSubcategory = e.target.dataset.subcategory;
-      loadStock().catch(e => console.error("Subcategory load failed:", e));
+      loadStock().catch(console.error);
     });
   });
 
@@ -103,15 +106,13 @@ function setupUI() {
   document.getElementById('cancelBtn').addEventListener('click', hideAddProductForm);
   document.getElementById('addProductForm').addEventListener('submit', handleFormSubmit);
 
-  // Dynamic form fields
+  // Category change dynamic subcategory display
   document.getElementById('prodCategory').addEventListener('change', function() {
-    const phoneSubcat = document.getElementById('prodSubcategoryPhones');
-    const tabletSubcat = document.getElementById('prodSubcategoryTablets');
-    phoneSubcat.style.display = this.value === 'Phones' ? 'block' : 'none';
-    tabletSubcat.style.display = this.value === 'Tablets' ? 'block' : 'none';
+    document.getElementById('prodSubcategoryPhones').style.display = this.value === 'Phones' ? 'block' : 'none';
+    document.getElementById('prodSubcategoryTablets').style.display = this.value === 'Tablets' ? 'block' : 'none';
   });
 
-  // Shipping/freight toggle
+  // Shipping/freight mutual exclusion
   document.getElementById('prodFreight').addEventListener('input', function() {
     document.getElementById('prodShipping').disabled = this.value && parseFloat(this.value) > 0;
   });
@@ -119,19 +120,19 @@ function setupUI() {
     document.getElementById('prodFreight').disabled = this.value && parseFloat(this.value) > 0;
   });
 
-  // Barcode scanner input
-  document.addEventListener('keydown', function(e) {
-    if (e.target.tagName === 'INPUT' && e.target.id !== 'prodBarcode') return;
-    
+  // Global barcode scanner input buffer
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' && e.target.id !== 'prodBarcodeInput') return;
+
     clearTimeout(barcodeTimeout);
-    
+
     if (e.key === 'Enter' && barcodeInputBuffer.length > 0) {
       e.preventDefault();
       processScannedBarcode(barcodeInputBuffer.trim());
       barcodeInputBuffer = '';
       return;
     }
-    
+
     if (/^[a-zA-Z0-9]$/.test(e.key)) {
       barcodeInputBuffer += e.key;
       barcodeTimeout = setTimeout(() => barcodeInputBuffer = '', BARCODE_DELAY);
@@ -145,7 +146,7 @@ function setupUI() {
     });
   });
 
-  // Add migration button for admin
+  // Admin migration button
   if (isAdminUser()) {
     const migrateBtn = document.createElement('button');
     migrateBtn.textContent = 'Migrate Barcodes';
@@ -153,8 +154,13 @@ function setupUI() {
     migrateBtn.addEventListener('click', migrateToBarcodeArray);
     document.querySelector('header').appendChild(migrateBtn);
   }
+
+  // Setup barcode input and multi-product UI
+  setupMultiBarcodeInput();
+  setupMultiProductUI();
 }
 
+// ==================== STOCK LOADING ====================
 async function loadStock() {
   const tbody = document.getElementById('stockTableBody');
   tbody.innerHTML = '<tr><td colspan="11" class="loading">Loading stock data...</td></tr>';
@@ -180,7 +186,6 @@ function displayStockItems(docs) {
     const item = doc.data();
     const tr = document.createElement('tr');
 
-    // Display first barcode + indicator if multiple exist
     const barcodeDisplay = item.barcodes?.length > 1 
       ? `${item.barcodes[0]} (${item.barcodes.length})` 
       : item.barcodes?.[0] || 'N/A';
@@ -208,13 +213,76 @@ function displayStockItems(docs) {
   });
 }
 
-// ==================== PRODUCT FORM FUNCTIONS ====================
+// ==================== MULTI-BARCODE INPUT FOR SINGLE PRODUCT ====================
+function setupMultiBarcodeInput() {
+  const barcodeInput = document.getElementById('prodBarcodeInput');
+  const addBarcodeBtn = document.getElementById('addBarcodeBtn');
+  const clearBarcodesBtn = document.getElementById('clearBarcodesBtn');
+
+  addBarcodeBtn.addEventListener('click', () => {
+    const barcode = barcodeInput.value.trim();
+    if (!barcode) {
+      alert('Please enter or scan a barcode.');
+      return;
+    }
+    if (scannedBarcodes.includes(barcode)) {
+      alert('This barcode is already added.');
+      barcodeInput.value = '';
+      return;
+    }
+    scannedBarcodes.push(barcode);
+    updateBarcodeListUI();
+    barcodeInput.value = '';
+    barcodeInput.focus();
+  });
+
+  barcodeInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addBarcodeBtn.click();
+    }
+  });
+
+  clearBarcodesBtn.addEventListener('click', () => {
+    scannedBarcodes = [];
+    updateBarcodeListUI();
+    barcodeInput.focus();
+  });
+}
+
+function updateBarcodeListUI() {
+  const container = document.getElementById('barcodeListContainer');
+  container.innerHTML = '';
+  scannedBarcodes.forEach((code, index) => {
+    const tag = document.createElement('span');
+    tag.className = 'barcode-tag';
+    tag.textContent = code;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove barcode';
+    removeBtn.style.marginLeft = '6px';
+    removeBtn.addEventListener('click', () => {
+      scannedBarcodes.splice(index, 1);
+      updateBarcodeListUI();
+    });
+
+    tag.appendChild(removeBtn);
+    container.appendChild(tag);
+  });
+}
+
+// ==================== ADD/EDIT PRODUCT FORM ====================
 function showAddProductForm() {
   resetForm();
   document.getElementById('formTitle').textContent = 'Add New Product';
   document.getElementById('formSubmitBtn').textContent = 'Add Product';
   document.getElementById('addProductSection').style.display = 'block';
   document.getElementById('prodName').focus();
+
+  scannedBarcodes = [];
+  updateBarcodeListUI();
 }
 
 function hideAddProductForm() {
@@ -229,7 +297,10 @@ function resetForm() {
   editDocId = null;
   document.getElementById('prodShipping').disabled = false;
   document.getElementById('prodFreight').disabled = false;
-  document.getElementById('prodBarcode').disabled = false;
+  document.getElementById('prodBarcodeInput').disabled = false;
+
+  scannedBarcodes = [];
+  updateBarcodeListUI();
 }
 
 function populateFormForEdit(docId, item) {
@@ -240,16 +311,13 @@ function populateFormForEdit(docId, item) {
   document.getElementById('prodName').value = item.itemName || '';
   document.getElementById('prodCategory').value = item.category || '';
 
-  const phoneSubcat = document.getElementById('prodSubcategoryPhones');
-  const tabletSubcat = document.getElementById('prodSubcategoryTablets');
-
-  phoneSubcat.style.display = item.category === 'Phones' ? 'block' : 'none';
-  tabletSubcat.style.display = item.category === 'Tablets' ? 'block' : 'none';
+  document.getElementById('prodSubcategoryPhones').style.display = item.category === 'Phones' ? 'block' : 'none';
+  document.getElementById('prodSubcategoryTablets').style.display = item.category === 'Tablets' ? 'block' : 'none';
 
   if (item.category === 'Phones') {
-    phoneSubcat.value = item.subcategory || '';
+    document.getElementById('prodSubcategoryPhones').value = item.subcategory || '';
   } else if (item.category === 'Tablets') {
-    tabletSubcat.value = item.subcategory || '';
+    document.getElementById('prodSubcategoryTablets').value = item.subcategory || '';
   }
 
   document.getElementById('prodDescription').value = item.description || '';
@@ -258,8 +326,12 @@ function populateFormForEdit(docId, item) {
   document.getElementById('prodShipping').value = item.shipping || '';
   document.getElementById('prodSellingPrice').value = item.sellingPrice || '';
   document.getElementById('prodStockQty').value = item.stockQty || '';
-  document.getElementById('prodBarcode').value = item.barcodes?.[0] || '';
-  document.getElementById('prodBarcode').disabled = true;
+
+  document.getElementById('prodBarcodeInput').value = '';
+  document.getElementById('prodBarcodeInput').disabled = true;
+
+  scannedBarcodes = Array.isArray(item.barcodes) ? [...item.barcodes] : [];
+  updateBarcodeListUI();
 
   document.getElementById('addProductSection').style.display = 'block';
   document.getElementById('prodName').focus();
@@ -285,35 +357,30 @@ async function handleFormSubmit(e) {
     shipping: parseFloat(document.getElementById('prodShipping').value) || 0,
     sellingPrice: parseFloat(document.getElementById('prodSellingPrice').value) || 0,
     stockQty: parseInt(document.getElementById('prodStockQty').value) || 0,
-    barcodes: [document.getElementById('prodBarcode').value.trim()],
+    barcodes: scannedBarcodes.filter(bc => bc.trim() !== ''),
     lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
   };
 
-  if (!formData.itemName || !formData.category || !formData.barcodes[0]) {
-    alert('Please fill in all required fields');
+  if (!formData.itemName || !formData.category || formData.barcodes.length === 0) {
+    alert('Please fill in all required fields and add at least one barcode.');
     return;
   }
 
   try {
     if (editDocId) {
-      // For editing, keep existing barcodes
-      const existingProduct = await db.collection('stockmgt').doc(editDocId).get();
-      formData.barcodes = existingProduct.data().barcodes || formData.barcodes;
-      
+      const duplicates = await checkBarcodeDuplicates(formData.barcodes, editDocId);
+      if (duplicates.length > 0) {
+        alert(`Barcode(s) ${duplicates.join(', ')} already exist in other products.`);
+        return;
+      }
       await db.collection('stockmgt').doc(editDocId).update(formData);
       alert('Product updated successfully!');
     } else {
-      // Check for duplicate barcode
-      const barcode = formData.barcodes[0];
-      const snapshot = await db.collection('stockmgt')
-        .where('barcodes', 'array-contains', barcode)
-        .get();
-
-      if (!snapshot.empty) {
-        alert('Product with this barcode already exists!');
+      const duplicates = await checkBarcodeDuplicates(formData.barcodes);
+      if (duplicates.length > 0) {
+        alert(`Barcode(s) ${duplicates.join(', ')} already exist in other products.`);
         return;
       }
-
       await db.collection('stockmgt').add(formData);
       alert('Product added successfully!');
     }
@@ -326,7 +393,146 @@ async function handleFormSubmit(e) {
   }
 }
 
-// ==================== BARCODE MANAGEMENT ====================
+// Check barcode duplicates
+async function checkBarcodeDuplicates(barcodes, excludeDocId = null) {
+  const duplicates = [];
+  for (const barcode of barcodes) {
+    const snapshot = await db.collection('stockmgt')
+      .where('barcodes', 'array-contains', barcode)
+      .get();
+
+    snapshot.forEach(doc => {
+      if (doc.id !== excludeDocId) {
+        duplicates.push(barcode);
+      }
+    });
+  }
+  return duplicates;
+}
+
+// ==================== MULTI-PRODUCT ENTRY UI ====================
+function setupMultiProductUI() {
+  document.getElementById('saveAllBtn').addEventListener('click', saveAllProducts);
+  document.getElementById('clearAllBtn').addEventListener('click', () => {
+    if (confirm('Clear all products from the current entry list?')) {
+      multiProductList = [];
+      renderMultiProductTable();
+      document.getElementById('multiProductSection').style.display = 'none';
+    }
+  });
+}
+
+function addProductToMultiEntry(productId, productData, scannedBarcode) {
+  const existingIndex = multiProductList.findIndex(p => p.productId === productId);
+  if (existingIndex >= 0) {
+    multiProductList[existingIndex].quantity += 1;
+  } else {
+    multiProductList.push({
+      productId,
+      barcode: scannedBarcode,
+      itemName: productData.itemName || '',
+      category: productData.category || '',
+      costPrice: productData.costPrice || 0,
+      sellingPrice: productData.sellingPrice || 0,
+      quantity: 1
+    });
+  }
+  renderMultiProductTable();
+  document.getElementById('multiProductSection').style.display = 'block';
+}
+
+function renderMultiProductTable() {
+  const tbody = document.getElementById('multiProductTableBody');
+  tbody.innerHTML = '';
+  multiProductList.forEach((item, index) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${item.barcode}</td>
+      <td>${item.itemName}</td>
+      <td>${item.category}</td>
+      <td><input type="number" min="1" value="${item.quantity}" data-index="${index}" class="multi-qty-input" style="width: 60px;" /></td>
+      <td><input type="number" min="0" step="0.01" value="${item.costPrice}" data-index="${index}" class="multi-cost-input" style="width: 80px;" /></td>
+      <td><input type="number" min="0" step="0.01" value="${item.sellingPrice}" data-index="${index}" class="multi-selling-input" style="width: 80px;" /></td>
+      <td><button type="button" class="remove-multi-btn" data-index="${index}">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.multi-qty-input').forEach(input => {
+    input.addEventListener('change', e => {
+      const i = parseInt(e.target.dataset.index);
+      let val = parseInt(e.target.value);
+      if (isNaN(val) || val < 1) val = 1;
+      multiProductList[i].quantity = val;
+      e.target.value = val;
+    });
+  });
+  tbody.querySelectorAll('.multi-cost-input').forEach(input => {
+    input.addEventListener('change', e => {
+      const i = parseInt(e.target.dataset.index);
+      let val = parseFloat(e.target.value);
+      if (isNaN(val) || val < 0) val = 0;
+      multiProductList[i].costPrice = val;
+      e.target.value = val.toFixed(2);
+    });
+  });
+  tbody.querySelectorAll('.multi-selling-input').forEach(input => {
+    input.addEventListener('change', e => {
+      const i = parseInt(e.target.dataset.index);
+      let val = parseFloat(e.target.value);
+      if (isNaN(val) || val < 0) val = 0;
+      multiProductList[i].sellingPrice = val;
+      e.target.value = val.toFixed(2);
+    });
+  });
+  tbody.querySelectorAll('.remove-multi-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const i = parseInt(e.target.dataset.index);
+      multiProductList.splice(i, 1);
+      renderMultiProductTable();
+      if (multiProductList.length === 0) {
+        document.getElementById('multiProductSection').style.display = 'none';
+      }
+    });
+  });
+}
+
+async function saveAllProducts() {
+  if (multiProductList.length === 0) {
+    alert('No products to save.');
+    return;
+  }
+
+  const batch = db.batch();
+  const stockRef = db.collection('stockmgt');
+
+  try {
+    for (const item of multiProductList) {
+      const productDoc = await stockRef.doc(item.productId).get();
+      if (!productDoc.exists) {
+        alert(`Product ${item.itemName} not found in database.`);
+        continue;
+      }
+      batch.update(stockRef.doc(item.productId), {
+        stockQty: firebase.firestore.FieldValue.increment(item.quantity),
+        costPrice: item.costPrice,
+        sellingPrice: item.sellingPrice,
+        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    await batch.commit();
+    alert('All products saved successfully!');
+    multiProductList = [];
+    renderMultiProductTable();
+    document.getElementById('multiProductSection').style.display = 'none';
+    loadStock();
+  } catch (error) {
+    console.error('Error saving products:', error);
+    alert('Error saving products. Check console for details.');
+  }
+}
+
+// ==================== PROCESS SCANNED BARCODE ====================
 async function processScannedBarcode(barcode) {
   if (!barcode || barcode.length < 3) {
     playSound('error');
@@ -342,13 +548,11 @@ async function processScannedBarcode(barcode) {
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];
       const productData = doc.data();
-      showProductOptions(doc.id, productData, barcode);
+      addProductToMultiEntry(doc.id, productData, barcode);
       playSound('success');
     } else {
-      showAddProductForm();
-      document.getElementById('prodBarcode').value = barcode;
-      document.getElementById('prodName').focus();
-      playSound('info');
+      alert('Product not found in stock. Please add it manually.');
+      playSound('error');
     }
   } catch (error) {
     console.error("Barcode error:", error);
@@ -356,54 +560,8 @@ async function processScannedBarcode(barcode) {
   }
 }
 
-function showProductOptions(productId, productData, scannedBarcode) {
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h3>${productData.itemName}</h3>
-      <p>Barcode: ${scannedBarcode}</p>
-      <p>Current Stock: ${productData.stockQty}</p>
-      <p>${productData.barcodes.length > 1 ? `(${productData.barcodes.length} barcodes)` : ''}</p>
-      
-      <div class="modal-actions">
-        <button id="increaseStockBtn">Increase Stock</button>
-        <button id="addAnotherBarcodeBtn">Add Another Barcode</button>
-        <button id="editProductBtn">Edit Product</button>
-        <button id="viewBarcodesBtn">View All Barcodes</button>
-        <button id="cancelModalBtn">Cancel</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  document.getElementById('increaseStockBtn').addEventListener('click', () => {
-    increaseStockQuantity(productId, productData.stockQty);
-    modal.remove();
-  });
-
-  document.getElementById('addAnotherBarcodeBtn').addEventListener('click', () => {
-    addNewBarcodeToProduct(productId);
-    modal.remove();
-  });
-
-  document.getElementById('editProductBtn').addEventListener('click', () => {
-    populateFormForEdit(productId, productData);
-    modal.remove();
-  });
-
-  document.getElementById('viewBarcodesBtn').addEventListener('click', () => {
-    viewAllBarcodes(productData.barcodes);
-    modal.remove();
-  });
-
-  document.getElementById('cancelModalBtn').addEventListener('click', () => {
-    modal.remove();
-  });
-}
-
-async function showBarcodeManager(productId, productData) {
+// ==================== BARCODE MANAGEMENT MODALS ====================
+function showBarcodeManager(productId, productData) {
   const modal = document.createElement('div');
   modal.className = 'barcode-modal';
   
@@ -420,7 +578,7 @@ async function showBarcodeManager(productId, productData) {
         `).join('')}
       </ul>
       <div class="add-barcode">
-        <input type="text" id="newBarcodeInput" placeholder="New barcode">
+        <input type="text" id="newBarcodeInput" placeholder="New barcode" />
         <button id="addBarcodeBtn">Add</button>
       </div>
       <button id="closeBarcodeModal">Close</button>
@@ -459,12 +617,8 @@ async function showBarcodeManager(productId, productData) {
 
 async function addBarcodeToProduct(productId, newBarcode) {
   try {
-    // Check for duplicate across all products
-    const snapshot = await db.collection('stockmgt')
-      .where('barcodes', 'array-contains', newBarcode)
-      .get();
-
-    if (!snapshot.empty) {
+    const duplicates = await checkBarcodeDuplicates([newBarcode], productId);
+    if (duplicates.length > 0) {
       alert('This barcode is already assigned to another product!');
       return false;
     }
@@ -472,6 +626,7 @@ async function addBarcodeToProduct(productId, newBarcode) {
     await db.collection('stockmgt').doc(productId).update({
       barcodes: firebase.firestore.FieldValue.arrayUnion(newBarcode)
     });
+    alert('Barcode added successfully!');
     return true;
   } catch (error) {
     console.error("Error adding barcode:", error);
@@ -485,13 +640,16 @@ async function removeBarcode(productId, barcodeToRemove) {
     await db.collection('stockmgt').doc(productId).update({
       barcodes: firebase.firestore.FieldValue.arrayRemove(barcodeToRemove)
     });
+    alert('Barcode removed successfully!');
     return true;
   } catch (error) {
     console.error("Error removing barcode:", error);
+    alert(`Error: ${error.message}`);
     return false;
   }
 }
 
+// ==================== STOCK QUANTITY UPDATE ====================
 async function increaseStockQuantity(productId, currentQty) {
   const newQty = prompt(`Current quantity: ${currentQty}\nEnter amount to add:`, "1");
   
@@ -509,27 +667,10 @@ async function increaseStockQuantity(productId, currentQty) {
   }
 }
 
-function viewAllBarcodes(barcodes) {
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h3>All Barcodes</h3>
-      <ul class="barcode-list">
-        ${barcodes.map(barcode => `<li>${barcode}</li>`).join('')}
-      </ul>
-      <button id="closeBarcodesBtn">Close</button>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-  document.getElementById('closeBarcodesBtn').addEventListener('click', () => modal.remove());
-}
-
 // ==================== UTILITY FUNCTIONS ====================
 function isAdminUser() {
-  // Implement your admin check logic
-  return false; // Change based on your auth system
+  // Implement your admin check logic here
+  return false; // Change as needed
 }
 
 function playSound(type) {
