@@ -12,113 +12,138 @@
 </head>
 <body>
   <body class="stock"></body>
-  <header>
-    <img src="22.png" alt="Logo" class="logo" />
-    <h1>Stock Management</h1>
-    <button id="logoutBtn">Logout</button>
-  </header>
-  
-  <main>
-    <!-- Product Categories -->
-    <section class="categories">
-      <h2>Product Categories</h2>
-      <div class="dropdown">
-        <button class="category-btn">Tablets</button>
-        <div class="dropdown-content">
-          <button class="subcategory-btn" data-subcategory="Modio">Modio</button>
-          <button class="subcategory-btn" data-subcategory="Oteeto">Oteeto</button>
-          <button class="subcategory-btn" data-subcategory="Notebook 10">Notebook 10</button>
-          <button class="subcategory-btn" data-subcategory="Bebe">Bebe</button>
-        </div>
-      </div>
-      <div class="dropdown">
-        <button class="category-btn">Phones</button>
-        <div class="dropdown-content">
-          <button class="subcategory-btn" data-subcategory="Redmi">Redmi</button>
-          <button class="subcategory-btn" data-subcategory="Tecno">Tecno</button>
-          <button class="subcategory-btn" data-subcategory="Infinix">Infinix</button>
-          <button class="subcategory-btn" data-subcategory="Oppo">Oppo</button>
-          <button class="subcategory-btn" data-subcategory="Samsung">Samsung</button>
-          <button class="subcategory-btn" data-subcategory="Vivo">Vivo</button>
-        </div>
-      </div>
-      <button class="category-btn" data-category="All">All</button>
-    </section>
+    <header>
+      <img src="22.png" alt="Logo" class="logo" />
+      <h1>Stock Management</h1>
+      <button id="logoutBtn">Logout</button>
+    </header>
+    
+    <main>
+<!-- Product Categories -->
+<section class="categories">
+  <h2>Product Categories</h2>
+  <div class="dropdown">
+    <button class="category-btn">Tablets</button>
+    <div class="dropdown-content">
+      <button class="subcategory-btn" data-subcategory="Modio">Modio</button>
+      <button class="subcategory-btn" data-subcategory="Oteeto">Oteeto</button>
+      <button class="subcategory-btn" data-subcategory="Notebook 10">Notebook 10</button>
+      <button class="subcategory-btn" data-subcategory="Bebe">Bebe</button>
+      <button class="subcategory-btn" data-subcategory="Telzeal">Telzeal</button>
+    </div>
+  </div>
+  <div class="dropdown">
+    <button class="category-btn">Phones</button>
+    <div class="dropdown-content">
+      <button class="subcategory-btn" data-subcategory="Redmi">Redmi</button>
+      <button class="subcategory-btn" data-subcategory="Tecno">Tecno</button>
+      <button class="subcategory-btn" data-subcategory="Infinix">Infinix</button>
+      <button class="subcategory-btn" data-subcategory="Oppo">Oppo</button>
+      <button class="subcategory-btn" data-subcategory="Samsung">Samsung</button>
+      <button class="subcategory-btn" data-subcategory="Vivo">Vivo</button>
+    </div>
+  </div>
+  <button class="category-btn" data-category="All">All</button>
+</section>
 
-    <!-- Stock Section -->
-    <section id="stockSection">
-      <h2>Stock</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Barcodes</th>
-            <th>Product</th>
-            <th>Category</th>
-            <th>Subcategory</th>
-            <th>Description</th>
-            <th>Cost Price (KSH)</th>
-            <th>Freight (KSH)</th>
-            <th>Shipping (KSH)</th>
-            <th>Selling Price (KSH)</th>
-            <th>Stock Qty</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="stockTableBody"></tbody>
-      </table>
-      <button id="addProductBtn">Add New Product</button>
-    </section>
+<!-- Stock Section -->
+<section id="stockSection">
+  <h2>Stock</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Barcodes</th>
+        <th>Product</th>
+        <th>Category</th>
+        <th>Subcategory</th>
+        <th>Description</th>
+        <th>Cost Price (KSH)</th>
+        <th>Freight (KSH)</th>
+        <th>Shipping (KSH)</th>
+        <th>Selling Price (KSH)</th>
+        <th>Stock Qty</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="stockTableBody"></tbody>
+  </table>
+  <button id="addProductBtn" type="button">Add New Product</button>
+</section>
 
-    <!-- Add/Edit Product Form -->
-    <section id="addProductSection" style="display:none;">
-      <h2 id="formTitle">Add New Product</h2>
-      <form id="addProductForm">
-        <input type="text" id="prodName" placeholder="Product Name" required />
+<!-- Add/Edit Product Form -->
+<section id="addProductSection" style="display:none;">
+  <h2 id="formTitle">Add New Product</h2>
+  <form id="addProductForm">
+    <input type="text" id="prodName" placeholder="Product Name" required />
 
-        <select id="prodCategory" required>
-          <option value="">Select Category</option>
-          <option value="Tablets">Tablets</option>
-          <option value="Phones">Phones</option>
-        </select>
+    <select id="prodCategory" required>
+      <option value="">Select Category</option>
+      <option value="Tablets">Tablets</option>
+      <option value="Phones">Phones</option>
+    </select>
 
-        <!-- Subcategory for Phones -->
-        <select id="prodSubcategoryPhones" style="display:none;">
-          <option value="">Select Phone Subcategory</option>
-          <option value="Redmi">Redmi</option>
-          <option value="Tecno">Tecno</option>
-          <option value="Infinix">Infinix</option>
-          <option value="Oppo">Oppo</option>
-          <option value="Samsung">Samsung</option>
-          <option value="Vivo">Vivo</option>
-        </select>
+    <select id="prodSubcategoryPhones" style="display:none;">
+      <option value="">Select Phone Subcategory</option>
+      <option value="Redmi">Redmi</option>
+      <option value="Tecno">Tecno</option>
+      <option value="Infinix">Infinix</option>
+      <option value="Oppo">Oppo</option>
+      <option value="Samsung">Samsung</option>
+      <option value="Vivo">Vivo</option>
+    </select>
 
-        <!-- Subcategory for Tablets -->
-        <select id="prodSubcategoryTablets" style="display:none;">
-          <option value="">Select Tablet Subcategory</option>
-          <option value="Modio">Modio</option>
-          <option value="Oteeto">Oteeto</option>
-          <option value="Notebook 10">Notebook 10</option>
-          <option value="Bebe">Bebe</option>
-        </select>
+    <select id="prodSubcategoryTablets" style="display:none;">
+      <option value="">Select Tablet Subcategory</option>
+      <option value="Modio">Modio</option>
+      <option value="Oteeto">Oteeto</option>
+      <option value="Notebook 10">Notebook 10</option>
+      <option value="Bebe">Bebe</option>
+      <option value="Telzeal">Telzeal</option>
+    </select>
 
-        <input type="text" id="prodDescription" placeholder="Description" />
-        <input type="number" id="prodCostPrice" placeholder="Cost Price" min="0" required />
-        <input type="number" id="prodFreight" placeholder="Freight Cost" min="0" />
-        <input type="number" id="prodShipping" placeholder="Shipping Cost" min="0" />
-        <input type="number" id="prodSellingPrice" placeholder="Selling Price" min="0" required />
-        <input type="number" id="prodStockQty" placeholder="Stock Quantity" min="0" required />
+    <input type="text" id="prodDescription" placeholder="Description" />
+    <input type="number" id="prodCostPrice" placeholder="Cost Price" min="0" required />
+    <input type="number" id="prodFreight" placeholder="Freight Cost" min="0" />
+    <input type="number" id="prodShipping" placeholder="Shipping Cost" min="0" />
+    <input type="number" id="prodSellingPrice" placeholder="Selling Price" min="0" required />
+    <input type="number" id="prodStockQty" placeholder="Stock Quantity" min="0" required />
 
-        <!-- Multiple barcodes input as textarea -->
-        <input type="text" id="prodBarcode" placeholder="Barcode (unique per product unit)" required />
+    <div id="barcodeInputSection" style="margin-top: 10px;">
+      <input type="text" id="prodBarcodeInput" placeholder="Scan or enter barcode" />
+      <button type="button" id="addBarcodeBtn">Add Barcode</button>
+      <button type="button" id="clearBarcodesBtn">Clear Barcodes</button>
+    </div>
 
+    <div id="barcodeListContainer"></div>
 
-        <button type="submit" id="formSubmitBtn">Add Product</button>
-        <button type="button" id="cancelBtn">Cancel</button>
-      </form>
-    </section>
-  </main>
+    <button type="submit" id="formSubmitBtn">Add Product</button>
+    <button type="button" id="cancelBtn">Cancel</button>
+  </form>
+</section>
 
-  <script src="stock.js"></script>
-  <script src="background.js"></script>
+<!-- Multi-Product Entry Section -->
+<section id="multiProductSection" style="display:none; margin-top: 20px;">
+  <h2>Current Stock Entry List</h2>
+  <table id="multiProductTable" border="1" cellpadding="5" cellspacing="0" style="width:100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th>Barcode</th>
+        <th>Product Name</th>
+        <th>Category</th>
+        <th>Qty</th>
+        <th>Cost Price</th>
+        <th>Selling Price</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="multiProductTableBody"></tbody>
+  </table>
+  <button id="saveAllBtn" type="button" style="margin-top: 10px;">Save All to Stock</button>
+  <button id="clearAllBtn" type="button" style="margin-top: 10px; margin-left: 10px;">Clear List</button>
+</section>
+</main>
+
+<script src="stock.js"></script>
+<script src="background.js"></script>
 </body>
 </html>
