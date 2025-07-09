@@ -125,8 +125,8 @@ async function processScannedBarcode(barcode) {
 
       const quantityInputs = document.querySelectorAll('.sale-item-quantity');
       if (quantityInputs.length > 0) {
-        quantityInputs[quantityInputs.length - 1].focus();
-        quantityInputs[quantityInputs.length - 1].select();
+        quantityInputs[quantityInputs.length 0].focus();
+        quantityInputs[quantityInputs.length 0].select();
       }
     } else {
       barcodeInput.value = '';
