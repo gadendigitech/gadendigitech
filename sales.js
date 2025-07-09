@@ -13,7 +13,6 @@ if (!firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Global variables
 let products = [];
 let currentSaleItems = [];
 let barcodeInputBuffer = '';
@@ -40,9 +39,9 @@ function initializeApp() {
   document.getElementById('saleDate').valueAsDate = new Date();
   document.getElementById('saleBarcode').focus();
 
-  setupSaleTypeToggle();      // NEWLY ADDED CALL
-  setupGroupReceiptForm();    // NEWLY ADDED CALL
-  setupFilterButtons();       // NEWLY ADDED CALL
+  setupSaleTypeToggle();
+  setupGroupReceiptForm();
+  setupFilterButtons();
 }
 
 // Load products from Firestore
@@ -56,15 +55,21 @@ async function loadProducts() {
   }
 }
 
-// Setup barcode scanner input
+// Setup barcode scanner input with buffer and manual input support
 function setupBarcodeScanner() {
   const barcodeInput = document.getElementById('saleBarcode');
+
+  // Keyboard buffer for scanner input
   barcodeInput.addEventListener('keydown', e => {
     clearTimeout(barcodeTimeout);
     if (e.key === 'Enter') {
       e.preventDefault();
-      processScannedBarcode(barcodeInputBuffer.trim());
+      const code = barcodeInputBuffer.trim();
       barcodeInputBuffer = '';
+      if (code.length > 0) {
+        processScannedBarcode(code);
+      }
+      barcodeInput.value = ''; // Clear input field after processing
       return;
     }
     if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -72,9 +77,61 @@ function setupBarcodeScanner() {
       barcodeTimeout = setTimeout(() => barcodeInputBuffer = '', BARCODE_DELAY);
     }
   });
+
+  // Manual input detection for partial barcode matching (last 5 digits)
+  barcodeInput.addEventListener('input', e => {
+    const val = e.target.value.trim();
+
+    if (val.length >= 5) {
+      const searchTerm = val.slice(-5);
+
+      const matches = products.filter(product =>
+        product.barcodes?.some(bc => bc.endsWith(searchTerm))
+      );
+
+      if (matches.length === 1) {
+        addProductFromManualInput(matches[0], val);
+        barcodeInput.value = '';
+        barcodeInputBuffer = '';
+      } else if (matches.length > 1) {
+        console.log(`Multiple products match barcode ending with "${searchTerm}". Please enter more digits.`);
+      } else {
+        console.log(`No product found with barcode ending "${searchTerm}".`);
+      }
+    }
+  });
 }
 
-// Process scanned barcode and add/update product in current sale
+// Add product from manual input or partial barcode match
+function addProductFromManualInput(product, inputBarcode) {
+  if ((product.stockQty || 0) <= 0) {
+    alert(`Product "${product.itemName}" is out of stock!`);
+    playSound('error');
+    return;
+  }
+
+  // Each scanned barcode is a separate unit, so add a new item for each barcode
+  currentSaleItems.push({
+    id: product.id,
+    itemName: product.itemName,
+    sellingPrice: product.sellingPrice,
+    costPrice: product.costPrice,
+    category: product.category,
+    scannedBarcodes: [inputBarcode], // single barcode per sale item
+    total: product.sellingPrice
+  });
+
+  updateSaleSummary();
+  playSound('success');
+
+  const quantityInputs = document.querySelectorAll('.sale-item-quantity');
+  if (quantityInputs.length > 0) {
+    quantityInputs[quantityInputs.length - 1].focus();
+    quantityInputs[quantityInputs.length - 1].select();
+  }
+}
+
+// Process scanned barcode and add as individual sale item
 async function processScannedBarcode(barcode) {
   if (!barcode) return;
   const barcodeInput = document.getElementById('saleBarcode');
@@ -88,35 +145,21 @@ async function processScannedBarcode(barcode) {
       const doc = snapshot.docs[0];
       const product = { id: doc.id, ...doc.data() };
 
-      // Validate essential fields with defaults
-      product.sellingPrice = typeof product.sellingPrice === 'number' ? product.sellingPrice : 0;
-      product.costPrice = typeof product.costPrice === 'number' ? product.costPrice : 0;
-      product.stockQty = typeof product.stockQty === 'number' ? product.stockQty : 0;
-      product.category = product.category || '';
-      product.itemName = product.itemName || 'Unnamed Product';
-
-      // Check if product is out of stock
       if (product.stockQty <= 0) {
         alert(`Product "${product.itemName}" is out of stock!`);
-        barcodeInput.value = '';
         playSound('error');
+        barcodeInput.value = '';
         return;
       }
 
-      // Check if barcode already scanned in current sale
-      const existingIndex = currentSaleItems.findIndex(item => item.barcode === barcode);
-      if (existingIndex >= 0) {
-        alert(`Product "${product.itemName}" has already been scanned.`);
-        barcodeInput.value = '';
-        playSound('error');
-        return;
-      }
-
-      // Add product to current sale items
+      // Add a new sale item for this scanned barcode
       currentSaleItems.push({
-        ...product,
-        barcode,
-        quantity: 1,
+        id: product.id,
+        itemName: product.itemName,
+        sellingPrice: product.sellingPrice,
+        costPrice: product.costPrice,
+        category: product.category,
+        scannedBarcodes: [barcode], // single barcode per sale item
         total: product.sellingPrice
       });
 
@@ -124,22 +167,21 @@ async function processScannedBarcode(barcode) {
       updateSaleSummary();
       playSound('success');
 
-      // Focus last quantity input if any
       const quantityInputs = document.querySelectorAll('.sale-item-quantity');
       if (quantityInputs.length > 0) {
         quantityInputs[quantityInputs.length - 1].focus();
         quantityInputs[quantityInputs.length - 1].select();
       }
     } else {
-      barcodeInput.value = '';
-      playSound('error');
       alert(`Product with barcode ${barcode} not found in stock!`);
+      playSound('error');
+      barcodeInput.value = '';
     }
   } catch (error) {
     console.error("Barcode fetch error:", error);
-    barcodeInput.value = '';
-    playSound('error');
     alert("Error fetching product. Please try again.");
+    playSound('error');
+    barcodeInput.value = '';
   }
 }
 
@@ -148,11 +190,12 @@ function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
   container.innerHTML = '';
   currentSaleItems.forEach((item, index) => {
+    const quantity = item.scannedBarcodes.length; // always 1 here
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
-      <span>${item.itemName} (${item.barcode})</span>
-      <input type="number" class="sale-item-quantity" value="${item.quantity}" min="1" max="${item.stockQty}" data-index="${index}">
+      <span>${item.itemName} (Barcode: ${item.scannedBarcodes[0]})</span>
+      <input type="number" class="sale-item-quantity" value="${quantity}" min="1" max="${quantity}" data-index="${index}" disabled />
       <input type="number" class="sale-item-price" value="${item.sellingPrice.toFixed(2)}" min="0" step="0.01" data-index="${index}" style="width:60px;" />
       <span>= <span class="sale-item-total">${item.total.toFixed(2)}</span></span>
       <button class="remove-item" data-index="${index}">×</button>
@@ -160,27 +203,6 @@ function updateSaleSummary() {
     container.appendChild(div);
   });
 
-  // Quantity change handlers
-  document.querySelectorAll('.sale-item-quantity').forEach(input => {
-    input.addEventListener('change', e => {
-      const i = parseInt(e.target.dataset.index);
-      let q = parseInt(e.target.value);
-      if (q > currentSaleItems[i].stockQty) {
-        alert(`Only ${currentSaleItems[i].stockQty} available!`);
-        q = currentSaleItems[i].stockQty;
-        e.target.value = q;
-      }
-      if (q < 1) {
-        q = 1;
-        e.target.value = q;
-      }
-      currentSaleItems[i].quantity = q;
-      currentSaleItems[i].total = q * currentSaleItems[i].sellingPrice;
-      updateSaleSummary();
-    });
-  });
-
-  // Price change handlers
   document.querySelectorAll('.sale-item-price').forEach(input => {
     input.addEventListener('change', e => {
       const i = parseInt(e.target.dataset.index);
@@ -190,12 +212,11 @@ function updateSaleSummary() {
         return;
       }
       currentSaleItems[i].sellingPrice = p;
-      currentSaleItems[i].total = p * currentSaleItems[i].quantity;
+      currentSaleItems[i].total = p * currentSaleItems[i].scannedBarcodes.length;
       updateSaleSummary();
     });
   });
 
-  // Remove item handlers
   document.querySelectorAll('.remove-item').forEach(button => {
     button.addEventListener('click', e => {
       const i = parseInt(e.target.dataset.index);
@@ -204,7 +225,6 @@ function updateSaleSummary() {
     });
   });
 
-  // Update total amount
   const subtotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
   document.getElementById('saleTotal').value = subtotal.toFixed(2);
 }
@@ -251,53 +271,57 @@ function setupSalesForm() {
           }
           const balance = creditAmount - initialPayment;
           const newCreditSaleRef = creditSalesRef.doc();
+
           batch.set(newCreditSaleRef, {
             transactionId,
             date,
             clientName,
             clientPhone,
-            barcode: item.barcode,
+            scannedBarcode: item.scannedBarcodes[0], // single barcode per document
             itemName: item.itemName,
-            quantity: item.quantity,
+            quantity: 1,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
-            totalCost: item.costPrice * item.quantity,
-            creditAmount,
-            amountPaid: initialPayment,
-            balance,
+            totalCost: item.costPrice,
+            creditAmount: item.sellingPrice,
+            amountPaid: initialPayment / currentSaleItems.length,
+            balance: balance / currentSaleItems.length,
             dueDate,
             status: balance <= 0 ? 'Paid' : 'Pending',
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
+
           const itemRef = stockRef.doc(item.id);
           batch.update(itemRef, {
-            stockQty: firebase.firestore.FieldValue.increment(-item.quantity)
+            stockQty: firebase.firestore.FieldValue.increment(-1)
           });
         }
       } else {
         const salesRef = db.collection('sales');
         for (const item of currentSaleItems) {
           const newSaleRef = salesRef.doc();
+
           batch.set(newSaleRef, {
             transactionId,
             date,
             clientName,
             clientPhone,
-            barcode: item.barcode,
+            scannedBarcode: item.scannedBarcodes[0], // single barcode per document
             itemName: item.itemName,
-            quantity: item.quantity,
+            quantity: 1,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
-            totalCost: item.costPrice * item.quantity,
-            totalSale: item.total,
+            totalCost: item.costPrice,
+            totalSale: item.sellingPrice,
             saleType,
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
+
           const itemRef = stockRef.doc(item.id);
           batch.update(itemRef, {
-            stockQty: firebase.firestore.FieldValue.increment(-item.quantity)
+            stockQty: firebase.firestore.FieldValue.increment(-1)
           });
         }
       }
@@ -335,103 +359,6 @@ function playSound(type) {
   audio.play();
 }
 
-// Setup for toggling credit sale fields visibility
-function setupSaleTypeToggle() {
-  const saleTypeSelect = document.getElementById('saleType');
-  const dueDateInput = document.getElementById('dueDate');
-  const dueDateLabel = document.getElementById('dueDateLabel');
-  const initialPaymentInput = document.getElementById('initialPayment');
-  const initialPaymentLabel = document.getElementById('initialPaymentLabel');
-
-  function toggleFields() {
-    if (saleTypeSelect.value === 'credit') {
-      dueDateInput.style.display = 'inline-block';
-      dueDateLabel.style.display = 'inline-block';
-      initialPaymentInput.style.display = 'inline-block';
-      initialPaymentLabel.style.display = 'inline-block';
-
-      // Default due date 30 days from today
-      const today = new Date();
-      const due = new Date(today.setDate(today.getDate() + 30));
-      dueDateInput.valueAsDate = due;
-
-      initialPaymentInput.value = '';
-    } else {
-      dueDateInput.style.display = 'none';
-      dueDateLabel.style.display = 'none';
-      initialPaymentInput.style.display = 'none';
-      initialPaymentLabel.style.display = 'none';
-
-      dueDateInput.value = '';
-      initialPaymentInput.value = '';
-    }
-  }
-  saleTypeSelect.addEventListener('change', toggleFields);
-  toggleFields(); // Call on load to set initial state
-}
-
-// Setup for the group receipt form
-function setupGroupReceiptForm() {
-  const groupReceiptForm = document.getElementById('groupReceiptForm');
-  if (groupReceiptForm) {
-    groupReceiptForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const clientName = document.getElementById('receipt-client').value.trim();
-      const date = document.getElementById('receipt-date').value;
-      if (!clientName || !date) {
-        alert("Please enter both client name and date.");
-        return;
-      }
-      try {
-        const salesSnapshot = await db.collection("sales")
-          .where("clientName", "==", clientName)
-          .where("date", "==", date)
-          .get();
-        if (salesSnapshot.empty) {
-          alert("No sales found for this client on this date.");
-          return;
-        }
-        const items = [];
-        let clientPhone = '';
-        salesSnapshot.forEach(doc => {
-          const sale = doc.data();
-          items.push({
-            itemName: sale.itemName || '',
-            category: sale.category || '',
-            barcode: sale.barcode || '',
-            quantity: sale.quantity || 0,
-            price: sale.sellingPrice || (sale.totalSale / sale.quantity) || 0 // Fallback if sellingPrice is missing
-          });
-          if (!clientPhone && sale.clientPhone) clientPhone = sale.clientPhone;
-        });
-        let total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        let cashInput = prompt("Enter cash received for this group sale:", total.toFixed(2));
-        let cash = parseFloat(cashInput);
-        if (isNaN(cash) || cash < 0 || cash < total) { // Validate cash input more robustly
-          alert("Invalid cash amount entered. Using total sale amount as cash.");
-          cash = total;
-        }
-        const saleForReceipt = {
-          items,
-          cash,
-          date,
-          clientName,
-          clientPhone
-        };
-        generateGroupReceipt(saleForReceipt);
-      } catch (error) {
-        console.error("Error generating group receipt:", error);
-        alert("Failed to generate group receipt. Check console for details.");
-      }
-    });
-  }
-}
-
-// Setup for filter buttons
-function setupFilterButtons() {
-  document.getElementById('filterSalesBtn').addEventListener('click', loadSalesRecords);
-  document.getElementById('filterCreditsBtn').addEventListener('click', loadCreditSales);
-}
 
 // Load sales records with date filter
 async function loadSalesRecords() {
@@ -442,15 +369,15 @@ async function loadSalesRecords() {
   if (fromDate && toDate) {
     const startDate = new Date(fromDate);
     const endDate = new Date(toDate);
-    endDate.setDate(endDate.getDate() + 1); // To include the end date whole day
-    query = query.where('timestamp', '>=', startDate).where('timestamp', '<', endDate); // Use < for end date
+    endDate.setDate(endDate.getDate() + 1);
+    query = query.where('timestamp', '>=', startDate).where('timestamp', '<=', endDate);
   } else if (fromDate) {
     const startDate = new Date(fromDate);
     query = query.where('timestamp', '>=', startDate);
   } else if (toDate) {
     const endDate = new Date(toDate);
     endDate.setDate(endDate.getDate() + 1);
-    query = query.where('timestamp', '<', endDate);
+    query = query.where('timestamp', '<=', endDate);
   }
   const snapshot = await query.get();
   tbody.innerHTML = '';
@@ -465,14 +392,14 @@ async function loadSalesRecords() {
       <td>${sale.barcode}</td>
       <td>${sale.category || ''}</td>
       <td>${sale.quantity}</td>
-      <td>${sale.sellingPrice ? sale.sellingPrice.toFixed(2) : '0.00'}</td>
-      <td>${sale.totalSale ? sale.totalSale.toFixed(2) : '0.00'}</td>
+      <td>${sale.sellingPrice.toFixed(2)}</td>
+      <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
       <td>${sale.saleType}</td>
     `;
     tbody.appendChild(tr);
   });
 }
-window.loadSalesRecords = loadSalesRecords; // Expose to window for inline HTML calls if any
+window.loadSalesRecords = loadSalesRecords;
 
 // Load credit sales with date filter
 async function loadCreditSales() {
@@ -483,14 +410,14 @@ async function loadCreditSales() {
     const startDate = new Date(fromDate);
     const endDate = new Date(toDate);
     endDate.setDate(endDate.getDate() + 1);
-    query = query.where('timestamp', '>=', startDate).where('timestamp', '<', endDate);
+    query = query.where('timestamp', '>=', startDate).where('timestamp', '<=', endDate);
   } else if (fromDate) {
     const startDate = new Date(fromDate);
     query = query.where('timestamp', '>=', startDate);
   } else if (toDate) {
     const endDate = new Date(toDate);
     endDate.setDate(endDate.getDate() + 1);
-    query = query.where('timestamp', '<', endDate);
+    query = query.where('timestamp', '<=', endDate);
   }
   const snapshot = await query.get();
   const tbody = document.getElementById('creditSalesTableBody');
@@ -505,9 +432,9 @@ async function loadCreditSales() {
       <td>${sale.category || ''}</td>
       <td>${sale.itemName || ''}</td>
       <td>${sale.quantity || ''}</td>
-      <td>${sale.creditAmount ? sale.creditAmount.toFixed(2) : '0.00'}</td>
-      <td>${sale.amountPaid ? sale.amountPaid.toFixed(2) : '0.00'}</td>
-      <td>${sale.balance ? sale.balance.toFixed(2) : '0.00'}</td>
+      <td>${sale.creditAmount ? sale.creditAmount.toFixed(2) : ''}</td>
+      <td>${sale.amountPaid ? sale.amountPaid.toFixed(2) : ''}</td>
+      <td>${sale.balance ? sale.balance.toFixed(2) : ''}</td>
       <td>${sale.dueDate || 'N/A'}</td>
       <td>${sale.status || ''}</td>
       <td>
@@ -518,7 +445,7 @@ async function loadCreditSales() {
     tbody.appendChild(tr);
   });
 }
-window.loadCreditSales = loadCreditSales; // Expose to window for inline HTML calls if any
+window.loadCreditSales = loadCreditSales;
 
 // Pay credit
 async function payCredit(id) {
@@ -556,7 +483,7 @@ async function payCredit(id) {
   loadCreditSales();
   calculateProfit();
 }
-window.payCredit = payCredit; // Expose to window for inline HTML calls if any
+window.payCredit = payCredit;
 
 // Delete credit sale
 async function deleteCredit(id) {
@@ -566,7 +493,7 @@ async function deleteCredit(id) {
     loadCreditSales();
   }
 }
-window.deleteCredit = deleteCredit; // Expose to window for inline HTML calls if any
+window.deleteCredit = deleteCredit;
 
 // Calculate profit & loss
 async function calculateProfit() {
@@ -592,7 +519,7 @@ async function calculateProfit() {
   const profitElement = document.getElementById('profit');
   profitElement.style.color = totalProfit >= 0 ? 'green' : 'red';
 }
-window.calculateProfit = calculateProfit; // Expose to window for inline HTML calls if any
+window.calculateProfit = calculateProfit;
 
 // Group Receipt Generation using Gadendigitech format (no logo)
 function generateGroupReceipt(sale) {
@@ -611,7 +538,7 @@ function generateGroupReceipt(sale) {
       { text: item.itemName || '', fontSize: 5, margin: [0, 0, 0, 0] },
       { text: item.category || '', fontSize: 5, margin: [0, 0, 0, 0] },
       { text: item.barcode || '', fontSize: 5, margin: [0, 0, 0, 0] },
-      { text: item.quantity.toString(), fontSize: 5, alignment: 'right', margin: [0, 0, 0, 0] },
+      { text: item.quantity.toString(), fontSize: 5, alignment: 'center', margin: [0, 0, 0, 0] },
       { text: formatCurrency(item.price), fontSize: 5, alignment: 'right', margin: [0, 0, 0, 0] }
     ]);
   });
@@ -624,8 +551,9 @@ function generateGroupReceipt(sale) {
     pageMargins: [10, 10, 10, 10],
     content: [
       { text: 'Gaden Digitech Ltd', style: 'header' },
-      { text: 'Paybill:700201  | Acc: 400103 ', style: 'subheader' },
+      { text: 'Paybill:  | Acc: ', style: 'subheader' },
       { text: 'gadendigitech@gmail.com', style: 'subheader' },
+      { text: `Receipt #: ${sale.id || ''}`, style: 'small' },
       { text: `Date: ${formatDate(sale.date)}`, style: 'small' },
       { text: `Client: ${sale.clientName}`, style: 'small' },
       { text: '\n' },
@@ -650,7 +578,7 @@ function generateGroupReceipt(sale) {
       },
       { text: '\n' },
       { text: 'Goods sold are not returnable.', style: 'note' },
-      { text: 'THANK YOU FOR PURCHASING. ', style: 'note' }
+      { text: 'Served by: ' + (sale.servedBy || 'System'), style: 'note' }
     ],
     styles: {
       header: { fontSize: 10, bold: true, alignment: 'center', margin: [0, 0, 0, 2] },
@@ -665,10 +593,6 @@ function generateGroupReceipt(sale) {
   };
   pdfMake.createPdf(docDefinition).print();
 }
-
-// Auto-focus barcode input on page load (removed the previous window.onload and moved the calls to initializeApp)
-// This ensures all setup functions are called after Firebase auth state is confirmed.
-
 
 // Auto-focus barcode input on page load
 window.onload = () => {
