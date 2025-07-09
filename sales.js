@@ -94,39 +94,41 @@ async function processScannedBarcode(barcode) {
       product.stockQty = typeof product.stockQty === 'number' ? product.stockQty : 0;
       product.category = product.category || '';
       product.itemName = product.itemName || 'Unnamed Product';
-          // Check if product is out of stock
+
+      // Check if product is out of stock
       if (product.stockQty <= 0) {
         alert(`Product "${product.itemName}" is out of stock!`);
         barcodeInput.value = '';
         playSound('error');
         return;
       }
-      const existingIndex = currentSaleItems.findIndex(item => item.barcode === barcode);
 
+      // Check if barcode already scanned in current sale
+      const existingIndex = currentSaleItems.findIndex(item => item.barcode === barcode);
       if (existingIndex >= 0) {
-        if (currentSaleItems[existingIndex].quantity < product.stockQty) {
-          currentSaleItems[existingIndex].quantity++;
-          currentSaleItems[existingIndex].total = currentSaleItems[existingIndex].quantity * product.sellingPrice;
-        } else {
-          alert(`Only ${product.stockQty} available in stock!`);
-        }
-      } else {
-        currentSaleItems.push({
-          ...product,
-          barcode,
-          quantity: 1,
-          total: product.sellingPrice
-        });
+        alert(`Product "${product.itemName}" has already been scanned.`);
+        barcodeInput.value = '';
+        playSound('error');
+        return;
       }
+
+      // Add product to current sale items
+      currentSaleItems.push({
+        ...product,
+        barcode,
+        quantity: 1,
+        total: product.sellingPrice
+      });
 
       barcodeInput.value = '';
       updateSaleSummary();
       playSound('success');
 
+      // Focus last quantity input if any
       const quantityInputs = document.querySelectorAll('.sale-item-quantity');
       if (quantityInputs.length > 0) {
-        quantityInputs[quantityInputs.length -1].focus();
-        quantityInputs[quantityInputs.length -1].select();
+        quantityInputs[quantityInputs.length - 1].focus();
+        quantityInputs[quantityInputs.length - 1].select();
       }
     } else {
       barcodeInput.value = '';
