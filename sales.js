@@ -609,7 +609,7 @@ function generateGroupReceipt(sale) {
       { text: item.itemName || '', fontSize: 5, margin: [0, 0, 0, 0] },
       { text: item.category || '', fontSize: 5, margin: [0, 0, 0, 0] },
       { text: item.barcode || '', fontSize: 5, margin: [0, 0, 0, 0] },
-      { text: item.quantity.toString(), fontSize: 5, alignment: 'center', margin: [0, 0, 0, 0] },
+      { text: item.quantity.toString(), fontSize: 5, alignment: 'right', margin: [0, 0, 0, 0] },
       { text: formatCurrency(item.price), fontSize: 5, alignment: 'right', margin: [0, 0, 0, 0] }
     ]);
   });
@@ -622,9 +622,8 @@ function generateGroupReceipt(sale) {
     pageMargins: [10, 10, 10, 10],
     content: [
       { text: 'Gaden Digitech Ltd', style: 'header' },
-      { text: 'Paybill:  | Acc: ', style: 'subheader' },
+      { text: 'Paybill:700201  | Acc: 400103 ', style: 'subheader' },
       { text: 'gadendigitech@gmail.com', style: 'subheader' },
-      { text: `Receipt #: ${sale.id || ''}`, style: 'small' },
       { text: `Date: ${formatDate(sale.date)}`, style: 'small' },
       { text: `Client: ${sale.clientName}`, style: 'small' },
       { text: '\n' },
@@ -649,7 +648,7 @@ function generateGroupReceipt(sale) {
       },
       { text: '\n' },
       { text: 'Goods sold are not returnable.', style: 'note' },
-      { text: 'Served by: ' + (sale.servedBy || 'System'), style: 'note' }
+      { text: 'THANK YOU FOR PURCHASING. ', style: 'note' }
     ],
     styles: {
       header: { fontSize: 10, bold: true, alignment: 'center', margin: [0, 0, 0, 2] },
