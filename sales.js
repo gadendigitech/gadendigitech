@@ -94,7 +94,13 @@ async function processScannedBarcode(barcode) {
       product.stockQty = typeof product.stockQty === 'number' ? product.stockQty : 0;
       product.category = product.category || '';
       product.itemName = product.itemName || 'Unnamed Product';
-
+          // Check if product is out of stock
+      if (product.stockQty <= 0) {
+        alert(`Product "${product.itemName}" is out of stock!`);
+        barcodeInput.value = '';
+        playSound('error');
+        return;
+      }
       const existingIndex = currentSaleItems.findIndex(item => item.barcode === barcode);
 
       if (existingIndex >= 0) {
