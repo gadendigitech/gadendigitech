@@ -328,7 +328,7 @@ function populateFormForEdit(docId, item) {
   document.getElementById('prodStockQty').value = item.stockQty || '';
 
   document.getElementById('prodBarcodeInput').value = '';
-  document.getElementById('prodBarcodeInput').disabled = true;
+  
 
   scannedBarcodes = Array.isArray(item.barcodes) ? [...item.barcodes] : [];
   updateBarcodeListUI();
