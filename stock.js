@@ -550,10 +550,7 @@ async function processScannedBarcode(barcode) {
       const productData = doc.data();
       addProductToMultiEntry(doc.id, productData, barcode);
       playSound('success');
-    } else {
-      alert('Product not found in stock. Please add it manually.');
-      playSound('error');
-    }
+    } 
   } catch (error) {
     console.error("Barcode error:", error);
     playSound('error');
