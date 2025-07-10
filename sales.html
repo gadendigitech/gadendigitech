@@ -10,9 +10,8 @@
   <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore-compat.js"></script>
   <!-- PDFMake for receipts -->
- <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/pdfmake.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/vfs_fonts.js"></script>
   <!-- QuaggaJS for barcode scanning -->
   <script src="https://unpkg.com/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
 </head>
@@ -48,22 +47,21 @@
           <input type="number" id="saleTotal" />
         </div>
 
-        <label for="saleType">Sale Type:</label>
-<select id="saleType" name="saleType">
-  <option value="cash">Cash</option>
-  <option value="credit">Credit</option>
-</select>
+        <select id="saleType" required>
+          <option value="cash">Cash Sale</option>
+          <option value="credit">Credit Sale</option>
+        </select>
 
-<div id="creditFields" style="display: none; margin-top: 10px;">
-  <label for="dueDate">Due Date:</label>
-  <input type="date" id="dueDate" name="dueDate" />
+        <!-- Due Date input for credit sales -->
+        <div id="creditFields" style="display:none; margin-top:10px;">
+          <label for="dueDate">Due Date:</label>
+          <input type="date" id="dueDate" />
+        
+          <label for="initialPayment">Initial Payment (KSH):</label>
+          <input type="number" id="initialPayment" min="0" step="0.01" value="0" />
+        </div>
 
-  <label for="initialPayment">Initial Amount Paid:</label>
-  <input type="number" id="initialPayment" name="initialPayment" min="0" step="0.01" value="0" />
-</div>
-
-<button type="submit" id="commitSaleBtn">Commit Sale</button>
-
+        <button type="submit">Complete Sale</button>
       </form>
     </section>
 
@@ -95,7 +93,7 @@
       <form id="groupReceiptForm">
         <input type="text" id="receipt-client" placeholder="Client Name" required />
         <input type="date" id="receipt-date" required />
-        <button onclick="generateGroupReceipt(sale)">Print Receipt</button>
+        <button type="submit">Print Group Receipt</button>
       </form>
     </section>
 
