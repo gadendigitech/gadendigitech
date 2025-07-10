@@ -460,6 +460,7 @@ async function loadCreditSales() {
       <td>${sale.status || ''}</td>
       <td>
         <button onclick="payCredit('${doc.id}')">Pay</button>
+        <button onclick="editCredit('${doc.id}')">Edit</button>
         <button onclick="deleteCredit('${doc.id}')">Delete</button>
       </td>
     `;
@@ -515,6 +516,43 @@ async function deleteCredit(id) {
   }
 }
 window.deleteCredit = deleteCredit;
+window.editCredit = async function(id) {
+  const docRef = db.collection('creditSales').doc(id);
+  const docSnap = await docRef.get();
+  if (!docSnap.exists) {
+    alert('Credit sale not found');
+    return;
+  }
+  const data = docSnap.data();
+
+  // Prompt for new values (pre-filled with current values)
+  const newDueDate = prompt('Edit Due Date (YYYY-MM-DD):', data.dueDate || '');
+  if (newDueDate === null) return; // Cancelled
+
+  const newAmountPaidStr = prompt('Edit Amount Paid:', data.amountPaid || 0);
+  if (newAmountPaidStr === null) return; // Cancelled
+  const newAmountPaid = parseFloat(newAmountPaidStr);
+  if (isNaN(newAmountPaid) || newAmountPaid < 0) {
+    alert('Invalid amount paid');
+    return;
+  }
+
+  // Recalculate balance and status
+  const newBalance = (data.creditAmount || 0) - newAmountPaid;
+  const newStatus = newBalance <= 0 ? 'Paid' : 'Pending';
+
+  // Update Firestore
+  await docRef.update({
+    dueDate: newDueDate,
+    amountPaid: newAmountPaid,
+    balance: newBalance,
+    status: newStatus
+  });
+
+  alert('Credit sale updated!');
+  loadCreditSales();
+  calculateProfit();
+};
 
 // Calculate profit & loss
 async function calculateProfit() {
