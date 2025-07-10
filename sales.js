@@ -524,33 +524,48 @@ window.calculateProfit = calculateProfit;
 // Group Receipt Generation using Gadendigitech format (no logo)
 function generateGroupReceipt(sale) {
   console.log('Generating receipt for sale:', sale);
-  if (!sale) {
-    alert('No sale data provided for receipt.');
+
+  if (!sale || !Array.isArray(sale.items) || sale.items.length === 0) {
+    alert('No valid sale data provided for receipt.');
     return;
   }
+
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
   };
-  const formatCurrency = (amount) => parseFloat(amount).toFixed(2);
+
+  const formatCurrency = (amount) => {
+    const num = Number(amount);
+    return isNaN(num) ? '0.00' : num.toFixed(2);
+  };
+
   let subtotal = 0;
+
+  // Prepare table body for items
   const itemsBody = [
-    ['Item','Category', 'Barcode', 'Qty', 'Price']
+    ['Item', 'Category', 'Barcode', 'Qty', 'Price']
   ];
+
   sale.items.forEach(item => {
-    subtotal += item.price * item.quantity;
+    const price = item.sellingPrice || item.price || 0;
+    const quantity = item.quantity || 1;
+    subtotal += price * quantity;
+
     itemsBody.push([
-      { text: item.itemName || '', fontSize: 5, margin: [0, 0, 0, 0] },
-      { text: item.category || '', fontSize: 5, margin: [0, 0, 0, 0] },
-      { text: item.barcode || '', fontSize: 5, margin: [0, 0, 0, 0] },
-      { text: item.quantity.toString(), fontSize: 5, alignment: 'center', margin: [0, 0, 0, 0] },
-      { text: formatCurrency(item.price), fontSize: 5, alignment: 'right', margin: [0, 0, 0, 0] }
+      { text: item.itemName || '', fontSize: 7, margin: [0, 2, 0, 2] },
+      { text: item.category || '', fontSize: 7, margin: [0, 2, 0, 2] },
+      { text: item.barcode || item.scannedBarcode || '', fontSize: 7, margin: [0, 2, 0, 2] },
+      { text: quantity.toString(), fontSize: 7, alignment: 'center', margin: [0, 2, 0, 2] },
+      { text: formatCurrency(price), fontSize: 7, alignment: 'right', margin: [0, 2, 0, 2] }
     ]);
   });
+
   const vat = subtotal * 0.16;
   const total = subtotal + vat;
   const cash = sale.cash !== undefined ? sale.cash : total;
-  const change = (cash - total) > 0 ? (cash - total) : 0;
+  const change = cash > total ? cash - total : 0;
+
   const docDefinition = {
     pageSize: { width: 227, height: 'auto' },
     pageMargins: [10, 10, 10, 10],
@@ -560,14 +575,14 @@ function generateGroupReceipt(sale) {
       { text: 'gadendigitech@gmail.com', style: 'subheader' },
       { text: `Receipt #: ${sale.id || ''}`, style: 'small' },
       { text: `Date: ${formatDate(sale.date)}`, style: 'small' },
-      { text: `Client: ${sale.clientName}`, style: 'small' },
+      { text: `Client: ${sale.clientName || ''}`, style: 'small' },
       { text: '\n' },
       {
         table: {
-          widths: [60, 40, '*', 50, 30],
+          widths: [60, 40, '*', 30, 40],
           body: itemsBody
         },
-        layout: 'noBorders'
+        layout: 'lightHorizontalLines'
       },
       { text: '\n' },
       {
@@ -576,7 +591,9 @@ function generateGroupReceipt(sale) {
           body: [
             ['Subtotal', formatCurrency(subtotal)],
             ['VAT (16%)', formatCurrency(vat)],
-            [{ text: 'TOTAL', bold: true }, { text: formatCurrency(total), bold: true }]
+            [{ text: 'TOTAL', bold: true }, { text: formatCurrency(total), bold: true }],
+            ['Cash', formatCurrency(cash)],
+            ['Change', formatCurrency(change)]
           ]
         },
         layout: 'noBorders'
@@ -586,18 +603,19 @@ function generateGroupReceipt(sale) {
       { text: 'Served by: ' + (sale.servedBy || 'System'), style: 'note' }
     ],
     styles: {
-      header: { fontSize: 10, bold: true, alignment: 'center', margin: [0, 0, 0, 2] },
+      header: { fontSize: 12, bold: true, alignment: 'center', margin: [0, 0, 0, 8] },
       subheader: { fontSize: 8, alignment: 'center' },
       small: { fontSize: 8, alignment: 'center' },
       note: { fontSize: 7, italics: true, alignment: 'center' }
     },
     defaultStyle: {
       fontSize: 8
-    },
-    images: {}
+    }
   };
+
   pdfMake.createPdf(docDefinition).print();
 }
+
 
 // Auto-focus barcode input on page load
 window.onload = () => {
