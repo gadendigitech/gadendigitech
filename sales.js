@@ -451,12 +451,45 @@ window.editSale = async function(id) {
     return;
   }
 
+  // Prompt for sale type
+  let newSaleType = prompt('Edit Sale Type (cash/credit):', data.saleType || 'cash');
+  if (newSaleType === null) return;
+  newSaleType = newSaleType.trim().toLowerCase();
+  if (newSaleType !== 'cash' && newSaleType !== 'credit') {
+    alert('Sale type must be "cash" or "credit"');
+    return;
+  }
+
+  // If changing to credit, ask for due date and initial payment
+  let dueDate = data.dueDate || '';
+  let initialPayment = data.initialPayment || 0;
+  if (newSaleType === 'credit') {
+    dueDate = prompt('Enter Due Date (YYYY-MM-DD):', dueDate);
+    if (!dueDate) {
+      alert('Due date is required for credit sales.');
+      return;
+    }
+    const initialPaymentStr = prompt('Enter Initial Payment:', initialPayment);
+    if (initialPaymentStr === null) return;
+    initialPayment = parseFloat(initialPaymentStr);
+    if (isNaN(initialPayment) || initialPayment < 0) {
+      alert('Invalid initial payment');
+      return;
+    }
+  } else {
+    dueDate = '';
+    initialPayment = 0;
+  }
+
   // Update Firestore
   await docRef.update({
     clientName: newClientName,
     clientPhone: newClientPhone,
     sellingPrice: newSellingPrice,
-    totalSale: newSellingPrice * (data.quantity || 1)
+    totalSale: newSellingPrice * (data.quantity || 1),
+    saleType: newSaleType,
+    dueDate: dueDate,
+    initialPayment: initialPayment
   });
 
   alert('Sale record updated!');
@@ -495,6 +528,7 @@ async function loadCreditSales() {
       <td>${sale.clientPhone || ''}</td>
       <td>${sale.category || ''}</td>
       <td>${sale.itemName || ''}</td>
+       <td>${sale.scannedBarcode || ''}</td> <!-- Barcode column -->
       <td>${sale.quantity || ''}</td>
       <td>${sale.creditAmount ? sale.creditAmount.toFixed(2) : ''}</td>
       <td>${sale.amountPaid ? sale.amountPaid.toFixed(2) : ''}</td>
