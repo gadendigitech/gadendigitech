@@ -35,6 +35,17 @@ function initializeApp() {
   loadSalesRecords();
   loadCreditSales();
   calculateProfit();
+function setupSaleTypeToggle() {
+  const saleTypeSelect = document.getElementById('saleType');
+  const creditFields = document.getElementById('creditFields');
+
+  function toggleCreditFields() {
+    creditFields.style.display = saleTypeSelect.value === 'credit' ? 'block' : 'none';
+  }
+
+  saleTypeSelect.addEventListener('change', toggleCreditFields);
+  toggleCreditFields(); // Initialize on page load
+}
 
   document.getElementById('saleDate').valueAsDate = new Date();
   document.getElementById('saleBarcode').focus();
@@ -247,15 +258,16 @@ function setupSalesForm() {
     let initialPayment = parseFloat(document.getElementById('initialPayment').value);
     if (isNaN(initialPayment) || initialPayment < 0) initialPayment = 0;
 
-    if (!date || !clientName) {
-      alert('Please fill all required fields!');
-      return;
-    }
     if (saleType === 'credit' && !dueDate) {
       alert('Please select a due date for the credit sale.');
       return;
     }
 
+    if (!date || !clientName) {
+      alert('Please fill all required fields!');
+      return;
+    }
+   
     try {
       const batch = db.batch();
       const stockRef = db.collection('stockmgt');
