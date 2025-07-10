@@ -195,12 +195,13 @@ function updateSaleSummary() {
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
-      <span>${item.itemName} (Barcode: ${item.scannedBarcodes[0]})</span>
-      <input type="number" class="sale-item-quantity" value="${quantity}" min="1" max="${quantity}" data-index="${index}" disabled />
-      <input type="number" class="sale-item-price" value="${item.sellingPrice.toFixed(2)}" min="0" step="0.01" data-index="${index}" style="width:60px;" />
-      <span>= <span class="sale-item-total">${item.total.toFixed(2)}</span></span>
-      <button class="remove-item" data-index="${index}">×</button>
-    `;
+  <span>${item.itemName} (Barcode: ${item.scannedBarcodes[0]})</span>
+  <input type="number" class="sale-item-quantity" value="${quantity}" min="1" max="${quantity}" data-index="${index}" disabled />
+  <label>Unit Price:</label>
+  <input type="number" class="sale-item-price" value="${item.sellingPrice.toFixed(2)}" min="0" step="0.01" data-index="${index}" style="width:80px;" />
+  <span>= <span class="sale-item-total">${item.total.toFixed(2)}</span></span>
+  <button class="remove-item" data-index="${index}">×</button>
+`;
     container.appendChild(div);
   });
 
@@ -297,7 +298,8 @@ function setupSalesForm() {
 
           const itemRef = stockRef.doc(item.id);
           batch.update(itemRef, {
-            stockQty: firebase.firestore.FieldValue.increment(-1)
+           stockQty: firebase.firestore.FieldValue.increment(-1),
+  barcodes: firebase.firestore.FieldValue.arrayRemove(item.scannedBarcodes[0])
           });
         }
       } else {
