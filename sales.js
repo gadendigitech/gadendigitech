@@ -389,7 +389,7 @@ async function loadSalesRecords() {
       <td>${sale.clientName}</td>
       <td>${sale.clientPhone}</td>
       <td>${sale.itemName}</td>
-      <td>${sale.barcode}</td>
+      <td>${sale.scannedBarcode || 'N/A'}</td> <!-- Fixed here -->
       <td>${sale.category || ''}</td>
       <td>${sale.quantity}</td>
       <td>${sale.sellingPrice.toFixed(2)}</td>
@@ -523,6 +523,11 @@ window.calculateProfit = calculateProfit;
 
 // Group Receipt Generation using Gadendigitech format (no logo)
 function generateGroupReceipt(sale) {
+  console.log('Generating receipt for sale:', sale);
+  if (!sale) {
+    alert('No sale data provided for receipt.');
+    return;
+  }
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
