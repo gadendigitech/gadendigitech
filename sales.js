@@ -35,22 +35,12 @@ function initializeApp() {
   loadSalesRecords();
   loadCreditSales();
   calculateProfit();
-function setupSaleTypeToggle() {
-  const saleTypeSelect = document.getElementById('saleType');
-  const creditFields = document.getElementById('creditFields');
 
-  function toggleCreditFields() {
-    creditFields.style.display = saleTypeSelect.value === 'credit' ? 'block' : 'none';
-  }
-
-  saleTypeSelect.addEventListener('change', toggleCreditFields);
-  toggleCreditFields(); // Initialize on page load
-}
+  setupSaleTypeToggle();
 
   document.getElementById('saleDate').valueAsDate = new Date();
   document.getElementById('saleBarcode').focus();
 
-  setupSaleTypeToggle();
   setupGroupReceiptForm();
   setupFilterButtons();
 }
@@ -254,20 +244,21 @@ function setupSalesForm() {
     const clientName = document.getElementById('clientName').value.trim();
     const clientPhone = document.getElementById('clientPhone').value.trim();
     const saleType = document.getElementById('saleType').value;
+
+    // Read credit fields
     const dueDate = document.getElementById('dueDate').value;
     let initialPayment = parseFloat(document.getElementById('initialPayment').value);
     if (isNaN(initialPayment) || initialPayment < 0) initialPayment = 0;
-
-    if (saleType === 'credit' && !dueDate) {
-      alert('Please select a due date for the credit sale.');
-      return;
-    }
 
     if (!date || !clientName) {
       alert('Please fill all required fields!');
       return;
     }
-   
+    if (saleType === 'credit' && !dueDate) {
+      alert('Please select a due date for the credit sale.');
+      return;
+    }
+
     try {
       const batch = db.batch();
       const stockRef = db.collection('stockmgt');
@@ -289,7 +280,7 @@ function setupSalesForm() {
             date,
             clientName,
             clientPhone,
-            scannedBarcode: item.scannedBarcodes[0], // single barcode per document
+            scannedBarcode: item.scannedBarcodes[0],
             itemName: item.itemName,
             quantity: 1,
             costPrice: item.costPrice,
@@ -319,7 +310,7 @@ function setupSalesForm() {
             date,
             clientName,
             clientPhone,
-            scannedBarcode: item.scannedBarcodes[0], // single barcode per document
+            scannedBarcode: item.scannedBarcodes[0],
             itemName: item.itemName,
             quantity: 1,
             costPrice: item.costPrice,
@@ -371,6 +362,24 @@ function playSound(type) {
   audio.play();
 }
 
+// Sale type toggle: show/hide credit fields
+function setupSaleTypeToggle() {
+  const saleTypeSelect = document.getElementById('saleType');
+  const creditFields = document.getElementById('creditFields');
+
+  function toggleCreditFields() {
+    if (saleTypeSelect.value === 'credit') {
+      creditFields.style.display = 'block';
+    } else {
+      creditFields.style.display = 'none';
+      document.getElementById('dueDate').value = '';
+      document.getElementById('initialPayment').value = '0';
+    }
+  }
+
+  saleTypeSelect.addEventListener('change', toggleCreditFields);
+  toggleCreditFields();
+}
 
 // Load sales records with date filter
 async function loadSalesRecords() {
@@ -401,7 +410,7 @@ async function loadSalesRecords() {
       <td>${sale.clientName}</td>
       <td>${sale.clientPhone}</td>
       <td>${sale.itemName}</td>
-      <td>${sale.scannedBarcode || 'N/A'}</td> <!-- Fixed here -->
+      <td>${sale.scannedBarcode || 'N/A'}</td>
       <td>${sale.category || ''}</td>
       <td>${sale.quantity}</td>
       <td>${sale.sellingPrice.toFixed(2)}</td>
@@ -627,7 +636,6 @@ function generateGroupReceipt(sale) {
 
   pdfMake.createPdf(docDefinition).print();
 }
-
 
 // Auto-focus barcode input on page load
 window.onload = () => {
