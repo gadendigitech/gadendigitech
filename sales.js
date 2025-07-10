@@ -326,7 +326,8 @@ function setupSalesForm() {
 
           const itemRef = stockRef.doc(item.id);
           batch.update(itemRef, {
-            stockQty: firebase.firestore.FieldValue.increment(-1)
+           stockQty: firebase.firestore.FieldValue.increment(-1),
+  barcodes: firebase.firestore.FieldValue.arrayRemove(item.scannedBarcodes[0])
           });
         }
       }
@@ -418,11 +419,51 @@ async function loadSalesRecords() {
       <td>${sale.sellingPrice.toFixed(2)}</td>
       <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
       <td>${sale.saleType}</td>
+      <td>
+       <button onclick="editSale('${doc.id}')">Edit</button>
+       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 window.loadSalesRecords = loadSalesRecords;
+window.editSale = async function(id) {
+  const docRef = db.collection('sales').doc(id);
+  const docSnap = await docRef.get();
+  if (!docSnap.exists) {
+    alert('Sale record not found');
+    return;
+  }
+  const data = docSnap.data();
+
+  // Prompt for new values (pre-filled with current values)
+  const newClientName = prompt('Edit Client Name:', data.clientName || '');
+  if (newClientName === null) return;
+
+  const newClientPhone = prompt('Edit Client Phone:', data.clientPhone || '');
+  if (newClientPhone === null) return;
+
+  const newSellingPriceStr = prompt('Edit Unit Price:', data.sellingPrice || 0);
+  if (newSellingPriceStr === null) return;
+  const newSellingPrice = parseFloat(newSellingPriceStr);
+  if (isNaN(newSellingPrice) || newSellingPrice < 0) {
+    alert('Invalid unit price');
+    return;
+  }
+
+  // Update Firestore
+  await docRef.update({
+    clientName: newClientName,
+    clientPhone: newClientPhone,
+    sellingPrice: newSellingPrice,
+    totalSale: newSellingPrice * (data.quantity || 1)
+  });
+
+  alert('Sale record updated!');
+  loadSalesRecords();
+  calculateProfit();
+};
+
 
 // Load credit sales with date filter
 async function loadCreditSales() {
