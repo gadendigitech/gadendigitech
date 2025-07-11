@@ -40,10 +40,12 @@ function initializeApp() {
   setupGroupReceiptForm();
   setupFilterButtons();
   setupClearFilterButtons();
-   document.getElementById('saleDate').valueAsDate = new Date();
-  document.getElementById('saleBarcode').focus();
 
-  // Setup clear filters buttons event listeners
+  document.getElementById('saleDate').valueAsDate = new Date();
+  document.getElementById('saleBarcode').focus();
+}
+
+// Setup clear filters buttons event listeners
 function setupClearFilterButtons() {
   document.getElementById('clearSalesFilterButton')?.addEventListener('click', () => {
     document.getElementById('filterSalesFromDate').value = '';
@@ -58,6 +60,10 @@ function setupClearFilterButtons() {
   });
 }
 
+// Setup filter buttons event listeners
+function setupFilterButtons() {
+  document.getElementById('filterSalesButton')?.addEventListener('click', loadSalesRecords);
+  document.getElementById('filterCreditsButton')?.addEventListener('click', loadCreditSales);
 }
 
 // Load products from Firestore
@@ -85,7 +91,7 @@ function setupBarcodeScanner() {
       if (code.length > 0) {
         processScannedBarcode(code);
       }
-      barcodeInput.value = ''; // Clear input field after processing
+      // Do NOT clear input here; clearing is handled after processing
       return;
     }
     if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -149,6 +155,7 @@ function addProductFromManualInput(product, inputBarcode) {
 
 // Process scanned barcode and add as individual sale item
 async function processScannedBarcode(barcode) {
+  console.log('Processing barcode:', barcode);
   if (!barcode) return;
   const barcodeInput = document.getElementById('saleBarcode');
   try {
@@ -179,9 +186,9 @@ async function processScannedBarcode(barcode) {
         total: product.sellingPrice
       });
 
-      barcodeInput.value = '';
       updateSaleSummary();
       playSound('success');
+      barcodeInput.value = '';
 
       const quantityInputs = document.querySelectorAll('.sale-item-quantity');
       if (quantityInputs.length > 0) {
@@ -210,13 +217,13 @@ function updateSaleSummary() {
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
-  <span>${item.itemName} (Barcode: ${item.scannedBarcodes[0]})</span>
-  <input type="number" class="sale-item-quantity" value="${quantity}" min="1" max="${quantity}" data-index="${index}" disabled />
-  <label>Unit Price:</label>
-  <input type="number" class="sale-item-price" value="${item.sellingPrice.toFixed(2)}" min="0" step="0.01" data-index="${index}" style="width:80px;" />
-  <span>= <span class="sale-item-total">${item.total.toFixed(2)}</span></span>
-  <button class="remove-item" data-index="${index}">×</button>
-`;
+      <span>${item.itemName} (Barcode: ${item.scannedBarcodes[0]})</span>
+      <input type="number" class="sale-item-quantity" value="${quantity}" min="1" max="${quantity}" data-index="${index}" disabled />
+      <label>Unit Price:</label>
+      <input type="number" class="sale-item-price" value="${item.sellingPrice.toFixed(2)}" min="0" step="0.01" data-index="${index}" style="width:80px;" />
+      <span>= <span class="sale-item-total">${item.total.toFixed(2)}</span></span>
+      <button class="remove-item" data-index="${index}">×</button>
+    `;
     container.appendChild(div);
   });
 
@@ -312,10 +319,9 @@ function setupSalesForm() {
 
           const itemRef = stockRef.doc(item.id);
           batch.update(itemRef, {
-  stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
-  barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
-});
-
+            stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
+            barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
+          });
         }
       } else {
         const salesRef = db.collection('sales');
@@ -340,11 +346,10 @@ function setupSalesForm() {
           });
 
           const itemRef = stockRef.doc(item.id);
-         batch.update(itemRef, {
-  stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
-  barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
-});
-
+          batch.update(itemRef, {
+            stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
+            barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
+          });
         }
       }
 
@@ -411,6 +416,8 @@ async function loadSalesRecords() {
   const tbody = document.getElementById('salesRecordsTableBody');
   const fromDate = document.getElementById('filterSalesFromDate')?.value;
   const toDate = document.getElementById('filterSalesToDate')?.value;
+  console.log('Loading sales records from:', fromDate, 'to:', toDate);
+
   let query = db.collection('sales').orderBy('timestamp', 'desc');
   if (fromDate && toDate) {
     const startDate = new Date(fromDate);
@@ -426,6 +433,7 @@ async function loadSalesRecords() {
     query = query.where('timestamp', '<=', endDate);
   }
   const snapshot = await query.get();
+  console.log('Sales records found:', snapshot.size);
   tbody.innerHTML = '';
   snapshot.forEach(doc => {
     const sale = doc.data();
@@ -450,6 +458,8 @@ async function loadSalesRecords() {
   });
 }
 window.loadSalesRecords = loadSalesRecords;
+
+// Edit sale record
 window.editSale = async function(id) {
   const docRef = db.collection('sales').doc(id);
   const docSnap = await docRef.get();
@@ -520,7 +530,7 @@ window.editSale = async function(id) {
   calculateProfit();
 };
 
-/ Add the generateReceipt function here
+// Generate receipt for a sale
 window.generateReceipt = async function(id) {
   try {
     const docRef = db.collection('sales').doc(id);
@@ -556,6 +566,8 @@ window.generateReceipt = async function(id) {
 async function loadCreditSales() {
   const fromDate = document.getElementById('filterCreditsFromDate')?.value;
   const toDate = document.getElementById('filterCreditsToDate')?.value;
+  console.log('Loading credit sales from:', fromDate, 'to:', toDate);
+
   let query = db.collection('creditSales').orderBy('timestamp', 'desc');
   if (fromDate && toDate) {
     const startDate = new Date(fromDate);
@@ -571,6 +583,7 @@ async function loadCreditSales() {
     query = query.where('timestamp', '<=', endDate);
   }
   const snapshot = await query.get();
+  console.log('Credit sales records found:', snapshot.size);
   const tbody = document.getElementById('creditSalesTableBody');
   tbody.innerHTML = '';
   snapshot.forEach(doc => {
@@ -582,7 +595,7 @@ async function loadCreditSales() {
       <td>${sale.clientPhone || ''}</td>
       <td>${sale.category || ''}</td>
       <td>${sale.itemName || ''}</td>
-       <td>${sale.scannedBarcode || ''}</td> <!-- Barcode column -->
+      <td>${sale.scannedBarcode || ''}</td>
       <td>${sale.quantity || ''}</td>
       <td>${sale.creditAmount ? sale.creditAmount.toFixed(2) : ''}</td>
       <td>${sale.amountPaid ? sale.amountPaid.toFixed(2) : ''}</td>
@@ -647,6 +660,8 @@ async function deleteCredit(id) {
   }
 }
 window.deleteCredit = deleteCredit;
+
+// Edit credit sale
 window.editCredit = async function(id) {
   const docRef = db.collection('creditSales').doc(id);
   const docSnap = await docRef.get();
@@ -656,7 +671,6 @@ window.editCredit = async function(id) {
   }
   const data = docSnap.data();
 
-  // Prompt for new values (pre-filled with current values)
   const newDueDate = prompt('Edit Due Date (YYYY-MM-DD):', data.dueDate || '');
   if (newDueDate === null) return; // Cancelled
 
@@ -668,11 +682,9 @@ window.editCredit = async function(id) {
     return;
   }
 
-  // Recalculate balance and status
   const newBalance = (data.creditAmount || 0) - newAmountPaid;
   const newStatus = newBalance <= 0 ? 'Paid' : 'Pending';
 
-  // Update Firestore
   await docRef.update({
     dueDate: newDueDate,
     amountPaid: newAmountPaid,
@@ -761,9 +773,9 @@ function generateGroupReceipt(sale) {
     pageMargins: [10, 10, 10, 10],
     content: [
       { text: 'Gaden Digitech Ltd', style: 'header' },
-      { text: 'Paybill:  | Acc: ', style: 'subheader' },
+      { text: 'Paybill: 700201 | Acc:400103 ', style: 'subheader' },
       { text: 'gadendigitech@gmail.com', style: 'subheader' },
-      { text: `Receipt #: ${sale.id || ''}`, style: 'small' },
+      { text: `Receipt: ${sale.id || ''}`, style: 'small' },
       { text: `Date: ${formatDate(sale.date)}`, style: 'small' },
       { text: `Client: ${sale.clientName || ''}`, style: 'small' },
       { text: '\n' },
