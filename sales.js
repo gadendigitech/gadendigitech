@@ -340,10 +340,11 @@ function setupSalesForm() {
           });
 
           const itemRef = stockRef.doc(item.id);
-          batch.update(itemRef, {
-            stockQty: firebase.firestore.FieldValue.increment(-1),
-            barcodes: firebase.firestore.FieldValue.arrayRemove(item.scannedBarcodes[0])
-          });
+         batch.update(itemRef, {
+  stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
+  barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
+});
+
         }
       }
 
