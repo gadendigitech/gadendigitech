@@ -37,12 +37,27 @@ function initializeApp() {
   calculateProfit();
 
   setupSaleTypeToggle();
-
-  document.getElementById('saleDate').valueAsDate = new Date();
-  document.getElementById('saleBarcode').focus();
-
   setupGroupReceiptForm();
   setupFilterButtons();
+  setupClearFilterButtons();
+   document.getElementById('saleDate').valueAsDate = new Date();
+  document.getElementById('saleBarcode').focus();
+
+  // Setup clear filters buttons event listeners
+function setupClearFilterButtons() {
+  document.getElementById('clearSalesFilterButton')?.addEventListener('click', () => {
+    document.getElementById('filterSalesFromDate').value = '';
+    document.getElementById('filterSalesToDate').value = '';
+    loadSalesRecords();
+  });
+
+  document.getElementById('clearCreditsFilterButton')?.addEventListener('click', () => {
+    document.getElementById('filterCreditsFromDate').value = '';
+    document.getElementById('filterCreditsToDate').value = '';
+    loadCreditSales();
+  });
+}
+
 }
 
 // Load products from Firestore
@@ -246,7 +261,6 @@ function setupSalesForm() {
     const clientPhone = document.getElementById('clientPhone').value.trim();
     const saleType = document.getElementById('saleType').value;
 
-    // Read credit fields
     const dueDate = document.getElementById('dueDate').value;
     let initialPayment = parseFloat(document.getElementById('initialPayment').value);
     if (isNaN(initialPayment) || initialPayment < 0) initialPayment = 0;
@@ -298,8 +312,8 @@ function setupSalesForm() {
 
           const itemRef = stockRef.doc(item.id);
           batch.update(itemRef, {
-           stockQty: firebase.firestore.FieldValue.increment(-1),
-  barcodes: firebase.firestore.FieldValue.arrayRemove(item.scannedBarcodes[0])
+            stockQty: firebase.firestore.FieldValue.increment(-1),
+            barcodes: firebase.firestore.FieldValue.arrayRemove(item.scannedBarcodes[0])
           });
         }
       } else {
@@ -326,11 +340,17 @@ function setupSalesForm() {
 
           const itemRef = stockRef.doc(item.id);
           batch.update(itemRef, {
-           stockQty: firebase.firestore.FieldValue.increment(-1),
-  barcodes: firebase.firestore.FieldValue.arrayRemove(item.scannedBarcodes[0])
+            stockQty: firebase.firestore.FieldValue.increment(-1),
+            barcodes: firebase.firestore.FieldValue.arrayRemove(item.scannedBarcodes[0])
           });
         }
       }
+
+      // Debug logs before committing batch
+      console.log('Preparing batch update for sale:', currentSaleItems);
+      currentSaleItems.forEach(item => {
+        console.log('Removing barcode:', item.scannedBarcodes[0], 'from product:', item.id);
+      });
 
       await batch.commit();
 
@@ -421,6 +441,7 @@ async function loadSalesRecords() {
       <td>${sale.saleType}</td>
       <td>
        <button onclick="editSale('${doc.id}')">Edit</button>
+       <button onclick="generateReceipt('${doc.id}')">Receipt</button>
        </td>
     `;
     tbody.appendChild(tr);
@@ -497,6 +518,37 @@ window.editSale = async function(id) {
   calculateProfit();
 };
 
+/ Add the generateReceipt function here
+window.generateReceipt = async function(id) {
+  try {
+    const docRef = db.collection('sales').doc(id);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      alert('Sale record not found');
+      return;
+    }
+    const saleData = docSnap.data();
+
+    const sale = {
+      id,
+      date: saleData.date,
+      clientName: saleData.clientName,
+      items: [{
+        itemName: saleData.itemName,
+        category: saleData.category,
+        scannedBarcode: saleData.scannedBarcode,
+        quantity: saleData.quantity,
+        sellingPrice: saleData.sellingPrice
+      }],
+      servedBy: auth.currentUser?.email || 'System'
+    };
+
+    generateGroupReceipt(sale);
+  } catch (error) {
+    console.error('Error generating receipt:', error);
+    alert('Error generating receipt. See console for details.');
+  }
+};
 
 // Load credit sales with date filter
 async function loadCreditSales() {
