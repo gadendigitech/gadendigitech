@@ -588,7 +588,7 @@ window.generateReceipt = async function(id) {
     items,
     servedBy: auth.currentUser?.email || 'System'
   });
-};
+
 
     generateGroupReceipt(sale);
   } catch (error) {
