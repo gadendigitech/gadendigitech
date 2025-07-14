@@ -443,7 +443,7 @@ async function loadSalesRecords() {
   const tbody = document.getElementById('salesRecordsTableBody');
   const fromDate = document.getElementById('filterSalesFromDate')?.value;
   const toDate = document.getElementById('filterSalesToDate')?.value;
-  console.log('Loading sales records from:', fromDate, 'to:', toDate);
+  const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
 
   let query = db.collection('sales').orderBy('timestamp', 'desc');
   if (fromDate && toDate) {
@@ -459,23 +459,19 @@ async function loadSalesRecords() {
     endDate.setDate(endDate.getDate() + 1);
     query = query.where('timestamp', '<=', endDate);
   }
-  const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
-
-let snapshot = await query.get();
-let records = [];
-snapshot.forEach(doc => {
-  const sale = doc.data();
-  if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-    records.push({id: doc.id, ...sale});
-  }
-});
-// Now render 'records' instead of snapshot directly
 
   const snapshot = await query.get();
-  console.log('Sales records found:', snapshot.size);
-  tbody.innerHTML = '';
+  let records = [];
   snapshot.forEach(doc => {
     const sale = doc.data();
+    if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+      records.push({id: doc.id, ...sale});
+    }
+  });
+
+  console.log('Sales records found:', records.length);
+  tbody.innerHTML = '';
+  records.forEach(sale => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sale.date}</td>
@@ -485,17 +481,18 @@ snapshot.forEach(doc => {
       <td>${sale.scannedBarcode || 'N/A'}</td>
       <td>${sale.category || ''}</td>
       <td>${sale.quantity}</td>
-      <td>${sale.sellingPrice.toFixed(2)}</td>
+      <td>${sale.sellingPrice ? sale.sellingPrice.toFixed(2) : ''}</td>
       <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
       <td>${sale.saleType}</td>
       <td>
-       <button onclick="editSale('${doc.id}')">Edit</button>
-       <button onclick="generateReceipt('${doc.id}')">Receipt</button>
-       </td>
+        <button onclick="editSale('${sale.id}')">Edit</button>
+        <button onclick="generateReceipt('${sale.id}')">Receipt</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 }
+
 window.loadSalesRecords = loadSalesRecords;
 
 // Edit sale record
@@ -613,9 +610,10 @@ window.generateReceipt = async function(id) {
 
 // Load credit sales with date filter
 async function loadCreditSales() {
+  const tbody = document.getElementById('creditSalesTableBody');
   const fromDate = document.getElementById('filterCreditsFromDate')?.value;
   const toDate = document.getElementById('filterCreditsToDate')?.value;
-  console.log('Loading credit sales from:', fromDate, 'to:', toDate);
+  const nameFilter = document.getElementById('filterCreditsClientName')?.value.trim().toLowerCase();
 
   let query = db.collection('creditSales').orderBy('timestamp', 'desc');
   if (fromDate && toDate) {
@@ -631,24 +629,19 @@ async function loadCreditSales() {
     endDate.setDate(endDate.getDate() + 1);
     query = query.where('timestamp', '<=', endDate);
   }
-  const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
-
-let snapshot = await query.get();
-let records = [];
-snapshot.forEach(doc => {
-  const sale = doc.data();
-  if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-    records.push({id: doc.id, ...sale});
-  }
-});
-// Now render 'records' instead of snapshot directly
 
   const snapshot = await query.get();
-  console.log('Credit sales records found:', snapshot.size);
-  const tbody = document.getElementById('creditSalesTableBody');
-  tbody.innerHTML = '';
+  let records = [];
   snapshot.forEach(doc => {
     const sale = doc.data();
+    if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+      records.push({id: doc.id, ...sale});
+    }
+  });
+
+  console.log('Credit sales records found:', records.length);
+  tbody.innerHTML = '';
+  records.forEach(sale => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sale.date || ''}</td>
@@ -664,14 +657,15 @@ snapshot.forEach(doc => {
       <td>${sale.dueDate || 'N/A'}</td>
       <td>${sale.status || ''}</td>
       <td>
-        <button onclick="payCredit('${doc.id}')">Pay</button>
-        <button onclick="editCredit('${doc.id}')">Edit</button>
-        <button onclick="deleteCredit('${doc.id}')">Delete</button>
+        <button onclick="payCredit('${sale.id}')">Pay</button>
+        <button onclick="editCredit('${sale.id}')">Edit</button>
+        <button onclick="deleteCredit('${sale.id}')">Delete</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
+
 window.loadCreditSales = loadCreditSales;
 
 // Pay credit
