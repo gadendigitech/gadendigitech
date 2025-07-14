@@ -280,10 +280,17 @@ function setupSalesForm() {
       alert('Please select a due date for the credit sale.');
       return;
     }
-
-    try {
-      const batch = db.batch();
       const stockRef = db.collection('stockmgt');
+    for (const item of currentSaleItems) {
+    const productDoc = await stockRef.doc(item.id).get();
+    const currentStock = productDoc.data().stockQty || 0;
+    if (currentStock < item.scannedBarcodes.length) {
+      alert(`Cannot complete sale: "${item.itemName}" only has ${currentStock} in stock!`);
+      return;
+    }
+  }
+    try {
+      const batch = db.batch()
       const transactionId = db.collection('sales').doc().id;
 
       if (saleType === 'credit') {
@@ -360,6 +367,26 @@ function setupSalesForm() {
       });
 
       await batch.commit();
+      for (const item of currentSaleItems) {
+  const updatedDoc = await db.collection('stockmgt').doc(item.id).get();
+  const updatedData = updatedDoc.data();
+  const barcodesLength = (updatedData.barcodes || []).length;
+  const stockQty = updatedData.stockQty || 0;
+
+  if (stockQty < 0) {
+    alert(`Critical: Negative stock detected for "${item.itemName}". Stock set to zero.`);
+    await db.collection('stockmgt').doc(item.id).update({ stockQty: 0 });
+  }
+
+  if (stockQty !== barcodesLength) {
+    alert(`Warning: Barcode/stock mismatch for "${item.itemName}". Stock synchronized to barcodes count.`);
+    await db.collection('stockmgt').doc(item.id).update({ stockQty: barcodesLength });
+  }
+
+  if (stockQty === 0) {
+    alert(`"${item.itemName}" is now out of stock!`);
+  }
+}
 
       alert(`${saleType === 'credit' ? 'Credit sale' : 'Sale'} completed successfully!`);
       playSound('success');
@@ -432,6 +459,18 @@ async function loadSalesRecords() {
     endDate.setDate(endDate.getDate() + 1);
     query = query.where('timestamp', '<=', endDate);
   }
+  const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
+
+let snapshot = await query.get();
+let records = [];
+snapshot.forEach(doc => {
+  const sale = doc.data();
+  if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+    records.push({id: doc.id, ...sale});
+  }
+});
+// Now render 'records' instead of snapshot directly
+
   const snapshot = await query.get();
   console.log('Sales records found:', snapshot.size);
   tbody.innerHTML = '';
@@ -532,28 +571,38 @@ window.editSale = async function(id) {
 
 // Generate receipt for a sale
 window.generateReceipt = async function(id) {
-  try {
-    const docRef = db.collection('sales').doc(id);
-    const docSnap = await docRef.get();
-    if (!docSnap.exists) {
-      alert('Sale record not found');
-      return;
-    }
-    const saleData = docSnap.data();
+  // Fetch the sale to get its transactionId
+  const docRef = db.collection('sales').doc(id);
+  const docSnap = await docRef.get();
+  if (!docSnap.exists) {
+    alert('Sale record not found');
+    return;
+  }
+  const saleData = docSnap.data();
+  const transactionId = saleData.transactionId;
 
-    const sale = {
-      id,
-      date: saleData.date,
-      clientName: saleData.clientName,
-      items: [{
-        itemName: saleData.itemName,
-        category: saleData.category,
-        scannedBarcode: saleData.scannedBarcode,
-        quantity: saleData.quantity,
-        sellingPrice: saleData.sellingPrice
-      }],
-      servedBy: auth.currentUser?.email || 'System'
-    };
+  // Fetch all sales with the same transactionId
+  const itemsSnap = await db.collection('sales').where('transactionId', '==', transactionId).get();
+  const items = [];
+  itemsSnap.forEach(doc => {
+    const d = doc.data();
+    items.push({
+      itemName: d.itemName,
+      category: d.category,
+      scannedBarcode: d.scannedBarcode,
+      quantity: d.quantity,
+      sellingPrice: d.sellingPrice
+    });
+  });
+
+  generateGroupReceipt({
+    id: transactionId,
+    date: saleData.date,
+    clientName: saleData.clientName,
+    items,
+    servedBy: auth.currentUser?.email || 'System'
+  });
+};
 
     generateGroupReceipt(sale);
   } catch (error) {
@@ -582,6 +631,18 @@ async function loadCreditSales() {
     endDate.setDate(endDate.getDate() + 1);
     query = query.where('timestamp', '<=', endDate);
   }
+  const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
+
+let snapshot = await query.get();
+let records = [];
+snapshot.forEach(doc => {
+  const sale = doc.data();
+  if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+    records.push({id: doc.id, ...sale});
+  }
+});
+// Now render 'records' instead of snapshot directly
+
   const snapshot = await query.get();
   console.log('Credit sales records found:', snapshot.size);
   const tbody = document.getElementById('creditSalesTableBody');
