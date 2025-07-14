@@ -15,8 +15,7 @@
   <!-- QuaggaJS for barcode scanning -->
   <script src="https://unpkg.com/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
 </head>
-<body>
-  <body class="sales"></body>
+<body class="sales">
   <header>
     <img src="22.png" alt="Logo" class="logo" />
     <h1>Sales Management</h1>
@@ -69,12 +68,11 @@
     <section id="salesRecordsSection">
       <h2>Sales Records</h2>
       <div class="date-range-filter">
-      <input type="date" id="filterSalesFromDate">
-<input type="date" id="filterSalesToDate">
-<button id="filterSalesButton">Filter Sales</button>
-<button id="clearSalesFilterButton">Clear</button>
-    <input type="text" id="filterCreditsClientName" placeholder="Client Name">
-
+        <input type="date" id="filterSalesFromDate" />
+        <input type="date" id="filterSalesToDate" />
+        <input type="text" id="filterSalesClientName" placeholder="Client Name" />
+        <button id="filterSalesButton">Filter Sales</button>
+        <button id="clearSalesFilterButton">Clear</button>
       </div>
       <table>
         <thead>
@@ -89,6 +87,7 @@
             <th>Unit Price</th>
             <th>Total Amount</th>
             <th>Sale Type</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="salesRecordsTableBody"></tbody>
@@ -104,12 +103,11 @@
     <section id="creditSalesSection">
       <h2>Credit Sales</h2>
       <div class="date-range-filter">
-        <input type="date" id="filterCreditsFromDate">
-<input type="date" id="filterCreditsToDate">
-   <input type="text" id="filterCreditsClientName" placeholder="Client Name">
-
-<button id="filterCreditsButton">Filter Credit Sales</button>
-<button id="clearCreditsFilterButton">Clear</button>
+        <input type="date" id="filterCreditsFromDate" />
+        <input type="date" id="filterCreditsToDate" />
+        <input type="text" id="filterCreditsClientName" placeholder="Client Name" />
+        <button id="filterCreditsButton">Filter Credit Sales</button>
+        <button id="clearCreditsFilterButton">Clear</button>
       </div>
       <table>
         <thead>
@@ -119,7 +117,7 @@
             <th>Phone</th>
             <th>Category</th>
             <th>Product</th>
-             <th>Barcode</th> <!-- Add this line -->
+            <th>Barcode</th>
             <th>Quantity</th>
             <th>Credit Amount (KSH)</th>
             <th>Amount Paid (KSH)</th>
@@ -141,6 +139,7 @@
       <p><strong>Profit: <span id="profit">0</span> KSH</strong></p>
     </section>
   </main>
+
   <script src="background.js"></script>
   <script src="sales.js"></script>
 </body>
