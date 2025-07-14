@@ -37,7 +37,7 @@ function initializeApp() {
   calculateProfit();
 
   setupSaleTypeToggle();
-  setupGroupReceiptForm();
+  setupGroupReceiptForm?.();
   setupFilterButtons();
   setupClearFilterButtons();
 
@@ -50,12 +50,14 @@ function setupClearFilterButtons() {
   document.getElementById('clearSalesFilterButton')?.addEventListener('click', () => {
     document.getElementById('filterSalesFromDate').value = '';
     document.getElementById('filterSalesToDate').value = '';
+    document.getElementById('filterSalesClientName').value = '';
     loadSalesRecords();
   });
 
   document.getElementById('clearCreditsFilterButton')?.addEventListener('click', () => {
     document.getElementById('filterCreditsFromDate').value = '';
     document.getElementById('filterCreditsToDate').value = '';
+    document.getElementById('filterCreditsClientName').value = '';
     loadCreditSales();
   });
 }
@@ -80,8 +82,6 @@ async function loadProducts() {
 // Setup barcode scanner input with buffer and manual input support
 function setupBarcodeScanner() {
   const barcodeInput = document.getElementById('saleBarcode');
-
-  // Keyboard buffer for scanner input
   barcodeInput.addEventListener('keydown', e => {
     clearTimeout(barcodeTimeout);
     if (e.key === 'Enter') {
@@ -91,7 +91,6 @@ function setupBarcodeScanner() {
       if (code.length > 0) {
         processScannedBarcode(code);
       }
-      // Do NOT clear input here; clearing is handled after processing
       return;
     }
     if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -100,17 +99,13 @@ function setupBarcodeScanner() {
     }
   });
 
-  // Manual input detection for partial barcode matching (last 5 digits)
   barcodeInput.addEventListener('input', e => {
     const val = e.target.value.trim();
-
     if (val.length >= 5) {
       const searchTerm = val.slice(-5);
-
       const matches = products.filter(product =>
         product.barcodes?.some(bc => bc.endsWith(searchTerm))
       );
-
       if (matches.length === 1) {
         addProductFromManualInput(matches[0], val);
         barcodeInput.value = '';
@@ -124,28 +119,23 @@ function setupBarcodeScanner() {
   });
 }
 
-// Add product from manual input or partial barcode match
 function addProductFromManualInput(product, inputBarcode) {
   if ((product.stockQty || 0) <= 0) {
     alert(`Product "${product.itemName}" is out of stock!`);
     playSound('error');
     return;
   }
-
-  // Each scanned barcode is a separate unit, so add a new item for each barcode
   currentSaleItems.push({
     id: product.id,
     itemName: product.itemName,
     sellingPrice: product.sellingPrice,
     costPrice: product.costPrice,
     category: product.category,
-    scannedBarcodes: [inputBarcode], // single barcode per sale item
+    scannedBarcodes: [inputBarcode],
     total: product.sellingPrice
   });
-
   updateSaleSummary();
   playSound('success');
-
   const quantityInputs = document.querySelectorAll('.sale-item-quantity');
   if (quantityInputs.length > 0) {
     quantityInputs[quantityInputs.length - 1].focus();
@@ -153,9 +143,7 @@ function addProductFromManualInput(product, inputBarcode) {
   }
 }
 
-// Process scanned barcode and add as individual sale item
 async function processScannedBarcode(barcode) {
-  console.log('Processing barcode:', barcode);
   if (!barcode) return;
   const barcodeInput = document.getElementById('saleBarcode');
   try {
@@ -163,33 +151,27 @@ async function processScannedBarcode(barcode) {
       .where('barcodes', 'array-contains', barcode)
       .limit(1)
       .get();
-
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];
       const product = { id: doc.id, ...doc.data() };
-
       if (product.stockQty <= 0) {
         alert(`Product "${product.itemName}" is out of stock!`);
         playSound('error');
         barcodeInput.value = '';
         return;
       }
-
-      // Add a new sale item for this scanned barcode
       currentSaleItems.push({
         id: product.id,
         itemName: product.itemName,
         sellingPrice: product.sellingPrice,
         costPrice: product.costPrice,
         category: product.category,
-        scannedBarcodes: [barcode], // single barcode per sale item
+        scannedBarcodes: [barcode],
         total: product.sellingPrice
       });
-
       updateSaleSummary();
       playSound('success');
       barcodeInput.value = '';
-
       const quantityInputs = document.querySelectorAll('.sale-item-quantity');
       if (quantityInputs.length > 0) {
         quantityInputs[quantityInputs.length - 1].focus();
@@ -208,12 +190,11 @@ async function processScannedBarcode(barcode) {
   }
 }
 
-// Update sale items UI and totals
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
   container.innerHTML = '';
   currentSaleItems.forEach((item, index) => {
-    const quantity = item.scannedBarcodes.length; // always 1 here
+    const quantity = item.scannedBarcodes.length;
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
@@ -253,7 +234,6 @@ function updateSaleSummary() {
   document.getElementById('saleTotal').value = subtotal.toFixed(2);
 }
 
-// Setup sales form submission
 function setupSalesForm() {
   document.getElementById('salesForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -267,7 +247,6 @@ function setupSalesForm() {
     const clientName = document.getElementById('clientName').value.trim();
     const clientPhone = document.getElementById('clientPhone').value.trim();
     const saleType = document.getElementById('saleType').value;
-
     const dueDate = document.getElementById('dueDate').value;
     let initialPayment = parseFloat(document.getElementById('initialPayment').value);
     if (isNaN(initialPayment) || initialPayment < 0) initialPayment = 0;
@@ -280,17 +259,17 @@ function setupSalesForm() {
       alert('Please select a due date for the credit sale.');
       return;
     }
-      const stockRef = db.collection('stockmgt');
+    const stockRef = db.collection('stockmgt');
     for (const item of currentSaleItems) {
-    const productDoc = await stockRef.doc(item.id).get();
-    const currentStock = productDoc.data().stockQty || 0;
-    if (currentStock < item.scannedBarcodes.length) {
-      alert(`Cannot complete sale: "${item.itemName}" only has ${currentStock} in stock!`);
-      return;
+      const productDoc = await stockRef.doc(item.id).get();
+      const currentStock = productDoc.data().stockQty || 0;
+      if (currentStock < item.scannedBarcodes.length) {
+        alert(`Cannot complete sale: "${item.itemName}" only has ${currentStock} in stock!`);
+        return;
+      }
     }
-  }
     try {
-      const batch = db.batch()
+      const batch = db.batch();
       const transactionId = db.collection('sales').doc().id;
 
       if (saleType === 'credit') {
@@ -360,33 +339,28 @@ function setupSalesForm() {
         }
       }
 
-      // Debug logs before committing batch
-      console.log('Preparing batch update for sale:', currentSaleItems);
-      currentSaleItems.forEach(item => {
-        console.log('Removing barcode:', item.scannedBarcodes[0], 'from product:', item.id);
-      });
-
       await batch.commit();
+
       for (const item of currentSaleItems) {
-  const updatedDoc = await db.collection('stockmgt').doc(item.id).get();
-  const updatedData = updatedDoc.data();
-  const barcodesLength = (updatedData.barcodes || []).length;
-  const stockQty = updatedData.stockQty || 0;
+        const updatedDoc = await db.collection('stockmgt').doc(item.id).get();
+        const updatedData = updatedDoc.data();
+        const barcodesLength = (updatedData.barcodes || []).length;
+        const stockQty = updatedData.stockQty || 0;
 
-  if (stockQty < 0) {
-    alert(`Critical: Negative stock detected for "${item.itemName}". Stock set to zero.`);
-    await db.collection('stockmgt').doc(item.id).update({ stockQty: 0 });
-  }
+        if (stockQty < 0) {
+          alert(`Critical: Negative stock detected for "${item.itemName}". Stock set to zero.`);
+          await db.collection('stockmgt').doc(item.id).update({ stockQty: 0 });
+        }
 
-  if (stockQty !== barcodesLength) {
-    alert(`Warning: Barcode/stock mismatch for "${item.itemName}". Stock synchronized to barcodes count.`);
-    await db.collection('stockmgt').doc(item.id).update({ stockQty: barcodesLength });
-  }
+        if (stockQty !== barcodesLength) {
+          alert(`Warning: Barcode/stock mismatch for "${item.itemName}". Stock synchronized to barcodes count.`);
+          await db.collection('stockmgt').doc(item.id).update({ stockQty: barcodesLength });
+        }
 
-  if (stockQty === 0) {
-    alert(`"${item.itemName}" is now out of stock!`);
-  }
-}
+        if (stockQty === 0) {
+          alert(`"${item.itemName}" is now out of stock!`);
+        }
+      }
 
       alert(`${saleType === 'credit' ? 'Credit sale' : 'Sale'} completed successfully!`);
       playSound('success');
@@ -410,7 +384,6 @@ function setupSalesForm() {
   });
 }
 
-// Play sound feedback
 function playSound(type) {
   const audio = new Audio();
   audio.src = type === 'success'
@@ -419,7 +392,6 @@ function playSound(type) {
   audio.play();
 }
 
-// Sale type toggle: show/hide credit fields
 function setupSaleTypeToggle() {
   const saleTypeSelect = document.getElementById('saleType');
   const creditFields = document.getElementById('creditFields');
@@ -445,45 +417,60 @@ async function loadSalesRecords() {
   const toDate = document.getElementById('filterSalesToDate')?.value;
   const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
 
-  let query = db.collection('sales').orderBy('timestamp', 'desc');
-  if (fromDate && toDate) {
-    const startDate = new Date(fromDate);
-    const endDate = new Date(toDate);
-    endDate.setDate(endDate.getDate() + 1);
-    query = query.where('timestamp', '>=', startDate).where('timestamp', '<=', endDate);
-  } else if (fromDate) {
-    const startDate = new Date(fromDate);
-    query = query.where('timestamp', '>=', startDate);
-  } else if (toDate) {
-    const endDate = new Date(toDate);
-    endDate.setDate(endDate.getDate() + 1);
-    query = query.where('timestamp', '<=', endDate);
+  let records = [];
+  try {
+    let query = db.collection('sales').orderBy('timestamp', 'desc');
+    if (fromDate && toDate) {
+      const startDate = new Date(fromDate);
+      const endDate = new Date(toDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('timestamp', '>=', startDate).where('timestamp', '<=', endDate);
+    } else if (fromDate) {
+      const startDate = new Date(fromDate);
+      query = query.where('timestamp', '>=', startDate);
+    } else if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('timestamp', '<=', endDate);
+    }
+    const snapshot = await query.get();
+    snapshot.forEach(doc => {
+      const sale = doc.data();
+      if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+        records.push({id: doc.id, ...sale});
+      }
+    });
+  } catch (error) {
+    // Fallback: load all, ignore timestamp
+    const snapshot = await db.collection('sales').get();
+    snapshot.forEach(doc => {
+      const sale = doc.data();
+      if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+        records.push({id: doc.id, ...sale});
+      }
+    });
   }
 
-  const snapshot = await query.get();
-  let records = [];
-  snapshot.forEach(doc => {
-    const sale = doc.data();
-    if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-      records.push({id: doc.id, ...sale});
-    }
-  });
-
-  console.log('Sales records found:', records.length);
   tbody.innerHTML = '';
+  if (records.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="11" style="text-align:center;">No sales records found.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
   records.forEach(sale => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${sale.date}</td>
-      <td>${sale.clientName}</td>
-      <td>${sale.clientPhone}</td>
-      <td>${sale.itemName}</td>
+      <td>${sale.date || ''}</td>
+      <td>${sale.clientName || ''}</td>
+      <td>${sale.clientPhone || ''}</td>
+      <td>${sale.itemName || ''}</td>
       <td>${sale.scannedBarcode || 'N/A'}</td>
       <td>${sale.category || ''}</td>
-      <td>${sale.quantity}</td>
+      <td>${sale.quantity || ''}</td>
       <td>${sale.sellingPrice ? sale.sellingPrice.toFixed(2) : ''}</td>
       <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
-      <td>${sale.saleType}</td>
+      <td>${sale.saleType || ''}</td>
       <td>
         <button onclick="editSale('${sale.id}')">Edit</button>
         <button onclick="generateReceipt('${sale.id}')">Receipt</button>
@@ -492,7 +479,6 @@ async function loadSalesRecords() {
     tbody.appendChild(tr);
   });
 }
-
 window.loadSalesRecords = loadSalesRecords;
 
 // Edit sale record
@@ -615,32 +601,47 @@ async function loadCreditSales() {
   const toDate = document.getElementById('filterCreditsToDate')?.value;
   const nameFilter = document.getElementById('filterCreditsClientName')?.value.trim().toLowerCase();
 
-  let query = db.collection('creditSales').orderBy('timestamp', 'desc');
-  if (fromDate && toDate) {
-    const startDate = new Date(fromDate);
-    const endDate = new Date(toDate);
-    endDate.setDate(endDate.getDate() + 1);
-    query = query.where('timestamp', '>=', startDate).where('timestamp', '<=', endDate);
-  } else if (fromDate) {
-    const startDate = new Date(fromDate);
-    query = query.where('timestamp', '>=', startDate);
-  } else if (toDate) {
-    const endDate = new Date(toDate);
-    endDate.setDate(endDate.getDate() + 1);
-    query = query.where('timestamp', '<=', endDate);
+  let records = [];
+  try {
+    let query = db.collection('creditSales').orderBy('timestamp', 'desc');
+    if (fromDate && toDate) {
+      const startDate = new Date(fromDate);
+      const endDate = new Date(toDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('timestamp', '>=', startDate).where('timestamp', '<=', endDate);
+    } else if (fromDate) {
+      const startDate = new Date(fromDate);
+      query = query.where('timestamp', '>=', startDate);
+    } else if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('timestamp', '<=', endDate);
+    }
+    const snapshot = await query.get();
+    snapshot.forEach(doc => {
+      const sale = doc.data();
+      if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+        records.push({id: doc.id, ...sale});
+      }
+    });
+  } catch (error) {
+    // Fallback: load all, ignore timestamp
+    const snapshot = await db.collection('creditSales').get();
+    snapshot.forEach(doc => {
+      const sale = doc.data();
+      if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
+        records.push({id: doc.id, ...sale});
+      }
+    });
   }
 
-  const snapshot = await query.get();
-  let records = [];
-  snapshot.forEach(doc => {
-    const sale = doc.data();
-    if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-      records.push({id: doc.id, ...sale});
-    }
-  });
-
-  console.log('Credit sales records found:', records.length);
   tbody.innerHTML = '';
+  if (records.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="13" style="text-align:center;">No credit sales records found.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
   records.forEach(sale => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -665,7 +666,6 @@ async function loadCreditSales() {
     tbody.appendChild(tr);
   });
 }
-
 window.loadCreditSales = loadCreditSales;
 
 // Pay credit
