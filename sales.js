@@ -303,8 +303,8 @@ function setupSalesForm() {
             sellingPrice: item.sellingPrice,
             totalCost: item.costPrice,
             creditAmount: item.sellingPrice,
-            amountPaid: initialPayment / currentSaleItems.length,
-            balance: balance / currentSaleItems.length,
+            amountPaid: initialPayment / currentSaleItems.length,    // <--- THIS LINE
+            balance: balance / currentSaleItems.length,              // <--- AND THIS LINE
             dueDate,
             status: balance <= 0 ? 'Paid' : 'Pending',
             category: item.category || '',
