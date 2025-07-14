@@ -433,31 +433,29 @@ async function loadSalesRecords() {
       endDate.setDate(endDate.getDate() + 1);
       query = query.where('timestamp', '<=', endDate);
     }
+
     const snapshot = await query.get();
     snapshot.forEach(doc => {
       const sale = doc.data();
       if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-        records.push({id: doc.id, ...sale});
+        records.push({ id: doc.id, ...sale });
       }
     });
   } catch (error) {
-    // Fallback: load all, ignore timestamp
-    const snapshot = await db.collection('sales').get();
-    snapshot.forEach(doc => {
-      const sale = doc.data();
-      if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-        records.push({id: doc.id, ...sale});
-      }
-    });
+    console.error("Error loading sales records:", error);
+    alert("Error loading sales records. See console for details.");
+    return;
   }
 
   tbody.innerHTML = '';
+
   if (records.length === 0) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td colspan="11" style="text-align:center;">No sales records found.</td>`;
     tbody.appendChild(tr);
     return;
   }
+
   records.forEach(sale => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -479,8 +477,8 @@ async function loadSalesRecords() {
     tbody.appendChild(tr);
   });
 }
-window.loadSalesRecords = loadSalesRecords;
 
+window.loadSalesRecords = loadSalesRecords;
 // Edit sale record
 window.editSale = async function(id) {
   const docRef = db.collection('sales').doc(id);
@@ -617,31 +615,29 @@ async function loadCreditSales() {
       endDate.setDate(endDate.getDate() + 1);
       query = query.where('timestamp', '<=', endDate);
     }
+
     const snapshot = await query.get();
     snapshot.forEach(doc => {
       const sale = doc.data();
       if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-        records.push({id: doc.id, ...sale});
+        records.push({ id: doc.id, ...sale });
       }
     });
   } catch (error) {
-    // Fallback: load all, ignore timestamp
-    const snapshot = await db.collection('creditSales').get();
-    snapshot.forEach(doc => {
-      const sale = doc.data();
-      if (!nameFilter || (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter))) {
-        records.push({id: doc.id, ...sale});
-      }
-    });
+    console.error("Error loading credit sales:", error);
+    alert("Error loading credit sales. See console for details.");
+    return;
   }
 
   tbody.innerHTML = '';
+
   if (records.length === 0) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td colspan="13" style="text-align:center;">No credit sales records found.</td>`;
     tbody.appendChild(tr);
     return;
   }
+
   records.forEach(sale => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -666,6 +662,7 @@ async function loadCreditSales() {
     tbody.appendChild(tr);
   });
 }
+
 window.loadCreditSales = loadCreditSales;
 
 // Pay credit
