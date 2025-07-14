@@ -12,7 +12,7 @@ if (!firebase.apps.length) {
 }
 const auth = firebase.auth();
 const db = firebase.firestore();
-
+window.db = db;
 let products = [];
 let currentSaleItems = [];
 let barcodeInputBuffer = '';
