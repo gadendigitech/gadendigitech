@@ -13,10 +13,10 @@ if (!firebase.apps.length) {
 } else {
   console.log('Firebase already initialized');
 }
-}
+
 const auth = firebase.auth();
 const db = firebase.firestore();
-window.db = db;
+window.db = db; // Expose db globally for debugging
 
 let products = [];
 let currentSaleItems = [];
@@ -42,7 +42,10 @@ function initializeApp() {
   calculateProfit();
 
   setupSaleTypeToggle();
-  setupGroupReceiptForm?.();
+  // Check if setupGroupReceiptForm is defined before calling
+  if (typeof setupGroupReceiptForm === 'function') {
+    setupGroupReceiptForm();
+  }
   setupFilterButtons();
   setupClearFilterButtons();
 
@@ -581,21 +584,20 @@ window.generateReceipt = async function(id) {
     });
   });
 
-  generateGroupReceipt({
-    id: transactionId,
-    date: saleData.date,
-    clientName: saleData.clientName,
-    items,
-    servedBy: auth.currentUser?.email || 'System'
-  });
-
-
-    generateGroupReceipt(sale);
+  try { // This try-catch block was misplaced, moved it here
+    generateGroupReceipt({
+      id: transactionId,
+      date: saleData.date,
+      clientName: saleData.clientName,
+      items,
+      servedBy: auth.currentUser?.email || 'System'
+    });
   } catch (error) {
     console.error('Error generating receipt:', error);
     alert('Error generating receipt. See console for details.');
   }
 };
+
 
 // Load credit sales with date filter
 async function loadCreditSales() {
