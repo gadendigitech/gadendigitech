@@ -9,6 +9,10 @@ if (!firebase.apps.length) {
     appId: "1:134032321432:web:dedbb18980661259ed",
     measurementId: "G-VLG9G3FCP0"
   });
+  console.log('Firebase initialized');
+} else {
+  console.log('Firebase already initialized');
+}
 }
 const auth = firebase.auth();
 const db = firebase.firestore();
