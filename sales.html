@@ -9,7 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore-compat.js"></script>
-  <!-- PDFMake for receipts -->
+  <!-- PDFMake for group receipts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/vfs_fonts.js"></script>
   <!-- QuaggaJS for barcode scanning -->
@@ -18,7 +18,8 @@
 <body class="sales">
   <header>
     <img src="22.png" alt="Logo" class="logo" />
-    <h1>Sales Management</h1>
+    <h1>Sales Management (Cash)</h1>
+    <a href="credit_sales.html" class="btn">Go to Credit Sales</a>
     <button id="logoutBtn">Logout</button>
   </header>
 
@@ -37,29 +38,24 @@
           <div class="scanner-status">Ready to scan</div>
         </div>
 
-        <div id="saleItemsContainer" class="sale-items-container">
-          <!-- Scanned items will appear here -->
-        </div>
+        <div id="saleItemsContainer" class="sale-items-container"></div>
 
         <div class="sale-total">
           <label>Total Amount:</label>
-          <input type="number" id="saleTotal" />
+          <input type="number" id="saleTotal" readonly />
         </div>
-
         <select id="saleType" required>
           <option value="cash">Cash Sale</option>
           <option value="credit">Credit Sale</option>
         </select>
-
-        <!-- Due Date input for credit sales -->
-        <div id="creditFields" style="display:none; margin-top:10px;">
+        
+        <div id="creditFields" style="display:none;">
           <label for="dueDate">Due Date:</label>
           <input type="date" id="dueDate" />
-        
           <label for="initialPayment">Initial Payment (KSH):</label>
           <input type="number" id="initialPayment" min="0" step="0.01" value="0" />
         </div>
-
+        
         <button type="submit">Complete Sale</button>
       </form>
     </section>
@@ -86,8 +82,6 @@
             <th>Qty</th>
             <th>Unit Price</th>
             <th>Total Amount</th>
-            <th>Sale Type</th>
-            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="salesRecordsTableBody"></tbody>
@@ -99,47 +93,14 @@
       </form>
     </section>
 
-    <!-- Credit Sales Section -->
-    <section id="creditSalesSection">
-      <h2>Credit Sales</h2>
-      <div class="date-range-filter">
-        <input type="date" id="filterCreditsFromDate" />
-        <input type="date" id="filterCreditsToDate" />
-        <input type="text" id="filterCreditsClientName" placeholder="Client Name" />
-        <button id="filterCreditsButton">Filter Credit Sales</button>
-        <button id="clearCreditsFilterButton">Clear</button>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Client</th>
-            <th>Phone</th>
-            <th>Category</th>
-            <th>Product</th>
-            <th>Barcode</th>
-            <th>Quantity</th>
-            <th>Credit Amount (KSH)</th>
-            <th>Amount Paid (KSH)</th>
-            <th>Balance (KSH)</th>
-            <th>Due Date</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="creditSalesTableBody"></tbody>
-      </table>
-    </section>
-
     <!-- Profit & Loss Section -->
     <section id="profitLossSection">
-      <h2>Profit & Loss Summary</h2>
+      <h2>Totals</h2>
       <p>Total Sales: <span id="totalSales">0</span> KSH</p>
       <p>Total Cost: <span id="totalCost">0</span> KSH</p>
       <p><strong>Profit: <span id="profit">0</span> KSH</strong></p>
     </section>
   </main>
-
   <script src="background.js"></script>
   <script src="sales.js"></script>
 </body>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gaden Digitech - Credit Sales</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore-compat.js"></script>
+</head>
+<body class="credit-sales">
+  <header>
+    <img src="22.png" alt="Logo" class="logo" />
+    <h1>Credit Sales Management</h1>
+    <a href="sales.html" class="btn">Go to Cash Sales</a>
+    <button id="logoutBtn">Logout</button>
+  </header>
+
+  <main>
+    <section id="creditSalesSection">
+      <h2>Credit Sales Records</h2>
+      <div class="date-range-filter">
+        <input type="date" id="filterCreditsFromDate" />
+        <input type="date" id="filterCreditsToDate" />
+        <input type="text" id="filterCreditsClientName" placeholder="Client Name" />
+        <button id="filterCreditsButton">Filter Credit Sales</button>
+        <button id="clearCreditsFilterButton">Clear</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Client</th>
+            <th>Phone</th>
+            <th>Category</th>
+            <th>Product</th>
+            <th>Barcode</th>
+            <th>Quantity</th>
+            <th>Credit Amount (KSH)</th>
+            <th>Amount Paid (KSH)</th>
+            <th>Balance (KSH)</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="creditSalesTableBody"></tbody>
+      </table>
+    </section>
+    <section id="creditTotalsSection">
+      <h2>Totals</h2>
+      <p>Total Outstanding Credit: <span id="totalCreditOutstanding">0</span> KSH</p>
+      <p>Total Amount Paid: <span id="totalCreditPaid">0</span> KSH</p>
+    </section>
+  </main>
+  <script src="background.js"></script>
+  <script src="credit_sales.js"></script>
+</body>
+</html>
