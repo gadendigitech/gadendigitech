@@ -225,39 +225,51 @@ function updateSaleSummary() {
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
-      <span>${item.itemName} (${quantity} @ ${item.sellingPrice.toFixed(2)})</span>
+      <span>${item.itemName} (${quantity} pcs)</span>
+      <input 
+        type="number" 
+        class="sale-unit-price" 
+        data-index="${index}" 
+        value="${item.sellingPrice.toFixed(2)}" 
+        min="0" step="0.01" 
+        style="width: 70px;"
+      />
       <span>Barcodes: ${item.scannedBarcodes.slice(0, 3).join(', ')}${item.scannedBarcodes.length > 3 ? '...' : ''}</span>
-      <span>= ${item.total.toFixed(2)}</span>
+      <span>Total: <input 
+        type="number" 
+        class="sale-item-total" 
+        data-index="${index}" 
+        value="${item.total.toFixed(2)}" 
+        min="0" step="0.01" 
+        style="width: 80px;"
+      /></span>
       <button class="remove-item" data-index="${index}">×</button>
     `;
     container.appendChild(div);
   });
-// Add event listeners for price changes
-  document.querySelectorAll('.sale-item-price').forEach(input => {
+
+  // Attach event listeners for unit price inputs
+  document.querySelectorAll('.sale-unit-price').forEach(input => {
     input.addEventListener('change', e => {
       const index = parseInt(e.target.dataset.index);
-      const newPrice = parseFloat(e.target.value);
-      
-      if (!isNaN(newPrice) && newPrice >= 0) {
-        currentSaleItems[index].sellingPrice = newPrice;
-        // Automatically update total based on quantity
-        currentSaleItems[index].total = newPrice * currentSaleItems[index].scannedBarcodes.length;
-        updateSaleSummary();
+      const newUnitPrice = parseFloat(e.target.value);
+      if (!isNaN(newUnitPrice) && newUnitPrice >= 0) {
+        currentSaleItems[index].sellingPrice = newUnitPrice;
+        currentSaleItems[index].total = newUnitPrice * currentSaleItems[index].scannedBarcodes.length;
+        updateSaleSummary(); // Refresh to update totals and inputs
       } else {
         e.target.value = currentSaleItems[index].sellingPrice.toFixed(2);
       }
     });
   });
 
-  // Add event listeners for total changes
+  // Attach event listeners for total inputs
   document.querySelectorAll('.sale-item-total').forEach(input => {
     input.addEventListener('change', e => {
       const index = parseInt(e.target.dataset.index);
       const newTotal = parseFloat(e.target.value);
-      
       if (!isNaN(newTotal) && newTotal >= 0) {
         currentSaleItems[index].total = newTotal;
-        // Update unit price based on new total and quantity
         const quantity = currentSaleItems[index].scannedBarcodes.length;
         if (quantity > 0) {
           currentSaleItems[index].sellingPrice = newTotal / quantity;
@@ -282,6 +294,7 @@ function updateSaleSummary() {
   const subtotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
   document.getElementById('saleTotal').value = subtotal.toFixed(2);
 }
+
 
 // --- STOCK & BARCODE SYNCHRONIZATION ---
 async function synchronizeStockAfterSale(currentSaleItems) {
