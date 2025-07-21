@@ -232,26 +232,53 @@ function updateSaleSummary() {
     `;
     container.appendChild(div);
   });
+// Add event listeners for price changes
   document.querySelectorAll('.sale-item-price').forEach(input => {
     input.addEventListener('change', e => {
-      const i = parseInt(e.target.dataset.index);
-      const p = parseFloat(e.target.value);
-      if (isNaN(p) || p < 0) {
-        e.target.value = currentSaleItems[i].sellingPrice.toFixed(2);
-        return;
+      const index = parseInt(e.target.dataset.index);
+      const newPrice = parseFloat(e.target.value);
+      
+      if (!isNaN(newPrice) && newPrice >= 0) {
+        currentSaleItems[index].sellingPrice = newPrice;
+        // Automatically update total based on quantity
+        currentSaleItems[index].total = newPrice * currentSaleItems[index].scannedBarcodes.length;
+        updateSaleSummary();
+      } else {
+        e.target.value = currentSaleItems[index].sellingPrice.toFixed(2);
       }
-      currentSaleItems[i].sellingPrice = p;
-      currentSaleItems[i].total = p * currentSaleItems[i].scannedBarcodes.length;
-      updateSaleSummary();
     });
   });
+
+  // Add event listeners for total changes
+  document.querySelectorAll('.sale-item-total').forEach(input => {
+    input.addEventListener('change', e => {
+      const index = parseInt(e.target.dataset.index);
+      const newTotal = parseFloat(e.target.value);
+      
+      if (!isNaN(newTotal) && newTotal >= 0) {
+        currentSaleItems[index].total = newTotal;
+        // Update unit price based on new total and quantity
+        const quantity = currentSaleItems[index].scannedBarcodes.length;
+        if (quantity > 0) {
+          currentSaleItems[index].sellingPrice = newTotal / quantity;
+        }
+        updateSaleSummary();
+      } else {
+        e.target.value = currentSaleItems[index].total.toFixed(2);
+      }
+    });
+  });
+
+  // Remove item functionality
   document.querySelectorAll('.remove-item').forEach(button => {
     button.addEventListener('click', e => {
-      const i = parseInt(e.target.dataset.index);
-      currentSaleItems.splice(i, 1);
+      const index = parseInt(e.target.dataset.index);
+      currentSaleItems.splice(index, 1);
       updateSaleSummary();
     });
   });
+
+  // Update grand total
   const subtotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
   document.getElementById('saleTotal').value = subtotal.toFixed(2);
 }
