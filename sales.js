@@ -146,35 +146,60 @@ function addProductFromManualInput(product, inputBarcode) {
 
 async function processScannedBarcode(barcode) {
   if (!barcode) return;
-  if (currentSaleItems.some(item => item.scannedBarcodes[0] === barcode)) {
-    alert('Product already scanned in this sale!');
+  
+  // Check if this barcode exists in ANY scannedBarcodes array
+  const alreadyScanned = currentSaleItems.some(item => 
+    item.scannedBarcodes.includes(barcode)
+  );
+  
+  if (alreadyScanned) {
+    alert('This barcode has already been scanned in this sale!');
     playSound('error');
     document.getElementById('saleBarcode').value = '';
     return;
   }
+
   const barcodeInput = document.getElementById('saleBarcode');
+  
   try {
     const snapshot = await db.collection('stockmgt')
       .where('barcodes', 'array-contains', barcode)
-      .limit(1).get();
+      .limit(1)
+      .get();
+
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];
       const product = { id: doc.id, ...doc.data() };
+      
       if (product.stockQty <= 0) {
         alert(`Product "${product.itemName}" is out of stock!`);
         playSound('error');
         barcodeInput.value = '';
         return;
       }
-      currentSaleItems.push({
-        id: product.id,
-        itemName: product.itemName,
-        sellingPrice: product.sellingPrice,
-        costPrice: product.costPrice,
-        category: product.category,
-        scannedBarcodes: [barcode],
-        total: product.sellingPrice
-      });
+
+      // Check if we already have this product in sale
+      const existingProductIndex = currentSaleItems.findIndex(
+        item => item.id === product.id
+      );
+
+      if (existingProductIndex >= 0) {
+        // Add barcode to existing product
+        currentSaleItems[existingProductIndex].scannedBarcodes.push(barcode);
+        currentSaleItems[existingProductIndex].total += product.sellingPrice;
+      } else {
+        // Add new product
+        currentSaleItems.push({
+          id: product.id,
+          itemName: product.itemName,
+          sellingPrice: product.sellingPrice,
+          costPrice: product.costPrice,
+          category: product.category,
+          scannedBarcodes: [barcode],
+          total: product.sellingPrice
+        });
+      }
+
       updateSaleSummary();
       playSound('success');
       barcodeInput.value = '';
@@ -184,6 +209,7 @@ async function processScannedBarcode(barcode) {
       barcodeInput.value = '';
     }
   } catch (error) {
+    console.error("Barcode processing error:", error);
     alert('Error fetching product. Check connectivity.');
     barcodeInput.value = '';
   }
@@ -193,16 +219,15 @@ async function processScannedBarcode(barcode) {
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
   container.innerHTML = '';
+  
   currentSaleItems.forEach((item, index) => {
     const quantity = item.scannedBarcodes.length;
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
-      <span>${item.itemName} (Barcode: ${item.scannedBarcodes[0]})</span>
-      <input type="number" class="sale-item-quantity" value="${quantity}" min="1" max="${quantity}" data-index="${index}" disabled />
-      <label>Unit Price:</label>
-      <input type="number" class="sale-item-price" value="${item.sellingPrice.toFixed(2)}" min="0" step="0.01" data-index="${index}" style="width:80px;" />
-      <span>= <span class="sale-item-total">${item.total.toFixed(2)}</span></span>
+      <span>${item.itemName} (${quantity} @ ${item.sellingPrice.toFixed(2)})</span>
+      <span>Barcodes: ${item.scannedBarcodes.slice(0, 3).join(', ')}${item.scannedBarcodes.length > 3 ? '...' : ''}</span>
+      <span>= ${item.total.toFixed(2)}</span>
       <button class="remove-item" data-index="${index}">×</button>
     `;
     container.appendChild(div);
