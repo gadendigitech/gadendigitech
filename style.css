@@ -441,10 +441,10 @@ table { display: block; overflow-x: auto; }
 }
 
 .price-controls input {
-  width: 80px;
-  padding: 5px;
+  width: 100px;
+  padding: 7px;
   border: 1px solid #ddd;
-  border-radius: 3px;
+  border-radius: 5px;
 }
 
 .remove-item {
