@@ -413,6 +413,50 @@ table { display: block; overflow-x: auto; }
   .sale-items-container { padding: 7px 1px; }
   table, th, td { font-size: .86em; }
 }
+/* Sale Item Styling */
+.sale-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  margin: 5px 0;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.price-controls {
+  display: flex;
+  gap: 15px;
+}
+
+.price-controls > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.price-controls label {
+  font-size: 0.9em;
+  color: #555;
+}
+
+.price-controls input {
+  width: 80px;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+}
+
+.remove-item {
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  cursor: pointer;
+  font-weight: bold;
+}
 
 /* --- Transitions --- */
 input, select, textarea, table, .sale-items-container, .group-receipt-list, .barcodeListContainer {
