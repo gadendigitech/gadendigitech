@@ -346,27 +346,35 @@ function setupSalesForm() {
       initialPayment = 0;
     }
 
-    const stockRef = db.collection('stockmgt');
-    for (const item of currentSaleItems) {
-      const productDoc = await stockRef.doc(item.id).get();
-      const currentStock = productDoc.data().stockQty || 0;
-      if (currentStock < item.scannedBarcodes.length) {
-        alert(`Cannot complete sale: "${item.itemName}" only has ${currentStock} in stock!`);
-        return;
-      }
-    }
-
     try {
       const batch = db.batch();
       const transactionId = db.collection('sales').doc().id;
+      const stockRef = db.collection('stockmgt');
 
-      if (saleType === 'credit') {
-        const creditSalesRef = db.collection('creditSales');
-        for (const item of currentSaleItems) {
+      // First verify all items have sufficient stock and valid barcodes
+      for (const item of currentSaleItems) {
+        const productDoc = await stockRef.doc(item.id).get();
+        const currentBarcodes = productDoc.data().barcodes || [];
+        
+        const missingBarcodes = item.scannedBarcodes.filter(b => !currentBarcodes.includes(b));
+        if (missingBarcodes.length > 0) {
+          throw new Error(`Barcodes not found in product ${item.itemName}: ${missingBarcodes.join(', ')}`);
+        }
+        
+        if ((productDoc.data().stockQty || 0) < item.scannedBarcodes.length) {
+          throw new Error(`Cannot complete sale: "${item.itemName}" only has ${productDoc.data().stockQty} in stock!`);
+        }
+      }
+
+      // Process all items
+      for (const item of currentSaleItems) {
+        const itemRef = stockRef.doc(item.id);
+        
+        if (saleType === 'credit') {
+          const creditSalesRef = db.collection('creditSales');
           const creditAmount = item.total;
           if (initialPayment > creditAmount) {
-            alert('Initial payment cannot exceed total credit amount.');
-            return;
+            throw new Error('Initial payment cannot exceed total credit amount.');
           }
           const balance = creditAmount - initialPayment;
           const newCreditSaleRef = creditSalesRef.doc();
@@ -389,15 +397,8 @@ function setupSalesForm() {
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
-          const itemRef = stockRef.doc(item.id);
-          batch.update(itemRef, {
-            stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
-            barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
-          });
-        }
-      } else {
-        const salesRef = db.collection('sales');
-        for (const item of currentSaleItems) {
+        } else {
+          const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
           batch.set(newSaleRef, {
             transactionId,
@@ -415,18 +416,16 @@ function setupSalesForm() {
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
-          const itemRef = stockRef.doc(item.id);
-          batch.update(itemRef, {
-            stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
-            barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
-          });
         }
+
+        // Update stock and barcodes
+        batch.update(itemRef, {
+          stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
+          barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
+        });
       }
+
       await batch.commit();
-
-      // Synchronize stockQty and barcodes counts after sale
-      await synchronizeStockAfterSale(currentSaleItems);
-
       alert(saleType === 'credit' ? 'Credit sale recorded.' : 'Cash sale completed!');
       playSound('success');
       currentSaleItems = [];
@@ -439,7 +438,7 @@ function setupSalesForm() {
       if (typeof loadCreditSales === 'function') loadCreditSales();
       calculateProfit();
     } catch (error) {
-      alert('Error processing sale. Try again or check console.');
+      alert('Error processing sale: ' + error.message);
       console.error(error);
     }
   });
