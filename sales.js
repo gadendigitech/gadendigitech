@@ -67,12 +67,18 @@ function setupClearFilterButtons() {
     document.getElementById('filterSalesToDate').value = '';
     document.getElementById('filterSalesClientName').value = '';
     loadSalesRecords();
+    calculateProfit();
   });
 }
-function setupFilterButtons() {
-  document.getElementById('filterSalesButton')?.addEventListener('click', loadSalesRecords);
+function setupClearFilterButtons() {
+  document.getElementById('clearSalesFilterButton')?.addEventListener('click', () => {
+    document.getElementById('filterSalesFromDate').value = '';
+    document.getElementById('filterSalesToDate').value = '';
+    document.getElementById('filterSalesClientName').value = '';
+    loadSalesRecords();
+    calculateProfit(); // Add this line to update profit when clearing filters
+  });
 }
-
 // --- PRODUCT LOADING ---
 async function loadProducts() {
   try {
@@ -634,24 +640,57 @@ function generateGroupReceipt(sale) {
   pdfMake.createPdf(docDefinition).print();
 }
 
-// --- CALCULATE PROFIT ---
+// --- CALCULATE PROFIT ---// --- CALCULATE PROFIT ---
 async function calculateProfit() {
-  const salesSnap = await db.collection('sales').get();
-  let totalSales = 0;
-  let totalCost = 0;
-  salesSnap.forEach(doc => {
-    const sale = doc.data();
-    if (!sale.saleType || sale.saleType === "cash" || sale.saleType === "credit-paid") {
-      totalSales += sale.totalSale || 0;
-      totalCost += sale.totalCost || 0;
+  const fromDate = document.getElementById('filterSalesFromDate')?.value;
+  const toDate = document.getElementById('filterSalesToDate')?.value;
+  const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
+
+  try {
+    let query = db.collection('sales').orderBy('timestamp', 'desc');
+    
+    // Apply the same date filters as loadSalesRecords()
+    if (fromDate && toDate) {
+      const startDate = new Date(fromDate);
+      const endDate = new Date(toDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('timestamp', '>=', startDate)
+                   .where('timestamp', '<=', endDate);
+    } else if (fromDate) {
+      const startDate = new Date(fromDate);
+      query = query.where('timestamp', '>=', startDate);
+    } else if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('timestamp', '<=', endDate);
     }
-  });
-  const totalProfit = totalSales - totalCost;
-  document.getElementById('totalSales').textContent = totalSales.toFixed(2);
-  document.getElementById('totalCost').textContent = totalCost.toFixed(2);
-  document.getElementById('profit').textContent = totalProfit.toFixed(2);
-  const profitElement = document.getElementById('profit');
-  profitElement.style.color = totalProfit >= 0 ? 'green' : 'red';
+
+    const salesSnap = await query.get();
+    let totalSales = 0;
+    let totalCost = 0;
+
+    salesSnap.forEach(doc => {
+      const sale = doc.data();
+      // Apply client name filter if it exists
+      const matchesClient = !nameFilter || 
+                          (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter));
+      
+      if ((!sale.saleType || sale.saleType === "cash" || sale.saleType === "credit-paid") && matchesClient) {
+        totalSales += sale.totalSale || 0;
+        totalCost += sale.totalCost || 0;
+      }
+    });
+
+    const totalProfit = totalSales - totalCost;
+    document.getElementById('totalSales').textContent = totalSales.toFixed(2);
+    document.getElementById('totalCost').textContent = totalCost.toFixed(2);
+    document.getElementById('profit').textContent = totalProfit.toFixed(2);
+    const profitElement = document.getElementById('profit');
+    profitElement.style.color = totalProfit >= 0 ? 'green' : 'red';
+  } catch (error) {
+    console.error("Error calculating profit:", error);
+    alert('Error calculating profit. Check console for details.');
+  }
 }
 window.calculateProfit = calculateProfit;
 
