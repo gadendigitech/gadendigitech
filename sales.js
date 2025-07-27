@@ -42,34 +42,43 @@ function initializeApp() {
   document.getElementById('logoutBtn').onclick = () => { auth.signOut(); };
 }
 
-// -- SALE TYPE UI TOGGLE --
-function setupSaleTypeToggle() {
+// -- SALE TYPE UI TOGGLE --function setupSaleTypeToggle() {
   const saleTypeSelect = document.getElementById('saleType');
   const creditFields = document.getElementById('creditFields');
+  
   if (!saleTypeSelect || !creditFields) return;
+  
   function toggleCreditFields() {
     if (saleTypeSelect.value === 'credit') {
       creditFields.style.display = 'block';
+      // Set due date to 7 days from now by default
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 7);
+      document.getElementById('dueDate').valueAsDate = dueDate;
+      document.getElementById('initialPayment').focus();
     } else {
       creditFields.style.display = 'none';
       document.getElementById('dueDate').value = '';
       document.getElementById('initialPayment').value = '0';
     }
   }
+  
   saleTypeSelect.addEventListener('change', toggleCreditFields);
-  toggleCreditFields();
+  toggleCreditFields(); // Initialize
 }
 
+
 // --- FILTER BUTTONS ---
-function setupClearFilterButtons() {
-  document.getElementById('clearSalesFilterButton')?.addEventListener('click', () => {
-    document.getElementById('filterSalesFromDate').value = '';
-    document.getElementById('filterSalesToDate').value = '';
-    document.getElementById('filterSalesClientName').value = '';
-    loadSalesRecords();
-    calculateProfit();
-  });
+function setupFilterButtons() {
+  const filterButton = document.getElementById('filterSalesButton');
+  if (filterButton) {
+    filterButton.addEventListener('click', async () => {
+      await loadSalesRecords();
+      await calculateProfit();
+    });
+  }
 }
+
 function setupClearFilterButtons() {
   document.getElementById('clearSalesFilterButton')?.addEventListener('click', () => {
     document.getElementById('filterSalesFromDate').value = '';
@@ -465,6 +474,8 @@ async function loadSalesRecords() {
   const toDate = document.getElementById('filterSalesToDate')?.value;
   const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
 
+   tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
+
   let records = [];
   try {
     let query = db.collection('sales').orderBy('timestamp', 'desc');
@@ -482,7 +493,13 @@ async function loadSalesRecords() {
       endDate.setDate(endDate.getDate() + 1);
       query = query.where('timestamp', '<=', endDate);
     }
-    const snapshot = await query.get();
+    const snapshot = await query.get(); 
+    tbody.innerHTML = '';
+
+    if (snapshot.empty) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center">No records found</td></tr>';
+      return;
+    }
     snapshot.forEach(doc => {
       const sale = doc.data();
       // Only sales (cash or credit-paid), not credits
@@ -515,6 +532,17 @@ async function loadSalesRecords() {
       <td>${sale.quantity || ''}</td>
       <td>${sale.sellingPrice ? sale.sellingPrice.toFixed(2) : ''}</td>
       <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
+       <div class="dropdown">
+              <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                Actions
+              </button>
+              <ul class="dropdown-menu">
+            
+                <li><a class="dropdown-item" href="#" onclick="sales records"('${doc.id}')">Sales Records</a></li>
+              </ul>
+            </div>
+          </td>
+        `;
     `;
     tbody.appendChild(tr);
   });
