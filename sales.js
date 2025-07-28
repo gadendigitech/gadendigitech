@@ -74,7 +74,7 @@ function setupSaleTypeToggle() {
 function setupFilterButtons() {
   const filterButton = document.getElementById('filterSalesButton');
   if (filterButton) {
-    filterButton.addEventListener('click', function() => {
+    filterButton.addEventListener('click', function() {
        loadSalesRecords();
        calculateProfit();
     });
