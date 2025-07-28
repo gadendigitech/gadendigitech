@@ -23,26 +23,31 @@ const BARCODE_DELAY = 50;
 auth.onAuthStateChanged(user => {
   if (!user) {
     window.location = 'index.html';
-    return;
+  } else {
+    initializeApp();
   }
-  initializeApp();
 });
 
 function initializeApp() {
+  setupFilterButtons();
+  setupClearFilterButtons();
+  setupSaleTypeToggle();
+  
   loadProducts();
   setupBarcodeScanner();
   setupSalesForm();
   loadSalesRecords();
   calculateProfit();
-  setupFilterButtons();
-  setupClearFilterButtons();
-  setupSaleTypeToggle(); // Toggle credit fields based on sale type dropdown
+  
   document.getElementById('saleDate').valueAsDate = new Date();
   document.getElementById('saleBarcode').focus();
-  document.getElementById('logoutBtn').onclick = () => { auth.signOut(); };
+  
+  document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
 }
 
-// -- SALE TYPE UI TOGGLE --function setupSaleTypeToggle() {
+
+// --- SALE TYPE TOGGLE WITH CREDIT FIELDS ---
+function setupSaleTypeToggle() {
   const saleTypeSelect = document.getElementById('saleType');
   const creditFields = document.getElementById('creditFields');
   
@@ -51,15 +56,13 @@ function initializeApp() {
   function toggleCreditFields() {
     if (saleTypeSelect.value === 'credit') {
       creditFields.style.display = 'block';
-      // Set due date to 7 days from now by default
+      // Set default due date to 7 days from now
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
       document.getElementById('dueDate').valueAsDate = dueDate;
-      document.getElementById('initialPayment').focus();
+      document.getElementById('initialPayment').value = '0';
     } else {
       creditFields.style.display = 'none';
-      document.getElementById('dueDate').value = '';
-      document.getElementById('initialPayment').value = '0';
     }
   }
   
@@ -67,27 +70,30 @@ function initializeApp() {
   toggleCreditFields(); // Initialize
 }
 
-
 // --- FILTER BUTTONS ---
 function setupFilterButtons() {
   const filterButton = document.getElementById('filterSalesButton');
   if (filterButton) {
-    filterButton.addEventListener('click', async () => {
-      await loadSalesRecords();
-      await calculateProfit();
+    filterButton.addEventListener('click', function() => {
+       loadSalesRecords();
+       calculateProfit();
     });
   }
 }
 
 function setupClearFilterButtons() {
-  document.getElementById('clearSalesFilterButton')?.addEventListener('click', () => {
-    document.getElementById('filterSalesFromDate').value = '';
-    document.getElementById('filterSalesToDate').value = '';
-    document.getElementById('filterSalesClientName').value = '';
-    loadSalesRecords();
-    calculateProfit(); // Add this line to update profit when clearing filters
-  });
+  const clearBtn = document.getElementById('clearSalesFilterButton');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      document.getElementById('filterSalesFromDate').value = '';
+      document.getElementById('filterSalesToDate').value = '';
+      document.getElementById('filterSalesClientName').value = '';
+      loadSalesRecords();
+      calculateProfit();
+    });
+  }
 }
+
 // --- PRODUCT LOADING ---
 async function loadProducts() {
   try {
@@ -517,7 +523,7 @@ async function loadSalesRecords() {
   if (records.length === 0) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td colspan="9" style="text-align:center;">No sales records found.</td>`;
-    tbody.appendChild(tr);
+   
     return;
   }
   records.forEach(sale => {
@@ -532,6 +538,7 @@ async function loadSalesRecords() {
       <td>${sale.quantity || ''}</td>
       <td>${sale.sellingPrice ? sale.sellingPrice.toFixed(2) : ''}</td>
       <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
+      <td>
        <div class="dropdown">
               <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 Actions
@@ -543,9 +550,12 @@ async function loadSalesRecords() {
             </div>
           </td>
         `;
-    `;
     tbody.appendChild(tr);
   });
+} catch (error) {
+    console.error("Error loading sales:", error);
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error loading records</td></tr>';
+ }
 }
 
 // --- GROUP RECEIPT (SALES ONLY) ---
