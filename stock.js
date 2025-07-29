@@ -190,19 +190,20 @@ async function loadStock() {
     if (currentSubcategory) query = query.where('subcategory', '==', currentSubcategory);
 
     const snapshot = await query.get();
-      // Apply client-side filtering for product name
+    
+    // Apply client-side filtering for product name/barcode
     const filteredDocs = currentFilter 
       ? snapshot.docs.filter(doc => {
           const data = doc.data();
           return (
             data.itemName?.toLowerCase().includes(currentFilter) ||
-            data.barcodes?.some(bc => bc.includes(currentFilter)) ||
+            (data.barcodes?.some(bc => bc.includes(currentFilter))) ||
             data.category?.toLowerCase().includes(currentFilter)
           );
         })
       : snapshot.docs;
 
-    displayStockItems(snapshot.docs);
+    displayStockItems(filteredDocs); // Pass the filtered docs to display
   } catch (error) {
     console.error("Stock loading error:", error);
     tbody.innerHTML = `<tr><td colspan="11" class="error">Error loading stock: ${error.message}</td></tr>`;
