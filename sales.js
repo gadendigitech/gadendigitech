@@ -25,10 +25,12 @@ auth.onAuthStateChanged(user => {
   if (!user) {
     window.location = 'index.html';
   } else {
-    initializeApp();
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeApp();
+    });
   }
 });
-
 function initializeApp() {
   setupFilterButtons();
   setupClearFilterButtons();
@@ -40,21 +42,31 @@ function initializeApp() {
   loadSalesRecords();
   calculateProfit();
   
-  document.getElementById('saleDate').valueAsDate = new Date();
-  document.getElementById('saleBarcode').focus();
-  document.getElementById('saveEditSaleBtn').addEventListener('click', saveEditedSale);
+ // Safely set date
+  const saleDateEl = document.getElementById('saleDate');
+  if (saleDateEl) saleDateEl.valueAsDate = new Date();
+  
+  // Safely focus barcode input
+  const barcodeInput = document.getElementById('saleBarcode');
+  if (barcodeInput) barcodeInput.focus();
+  
+  // Safely add event listeners
+  const saveEditBtn = document.getElementById('saveEditSaleBtn');
+  if (saveEditBtn) saveEditBtn.addEventListener('click', saveEditedSale);
 
-  document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', () => auth.signOut());
 }
-
 
 // --- SALE TYPE TOGGLE WITH CREDIT FIELDS ---
 function setupSaleTypeToggle() {
   const saleTypeSelect = document.getElementById('saleType');
   const creditFields = document.getElementById('creditFields');
   
-  if (!saleTypeSelect || !creditFields) return;
-  
+ if (!saleTypeSelect || !creditFields) {
+    console.warn('Required elements for sale type toggle not found');
+   return;
+ }
   function toggleCreditFields() {
     if (saleTypeSelect.value === 'credit') {
       creditFields.style.display = 'block';
@@ -522,11 +534,15 @@ function setupSalesForm() {
 
 
 function playSound(type) {
-  const audio = new Audio();
-  audio.src = type === 'success'
-    ? 'https://assets.mixkit.co/sfx/preview/mixkit-cash-register-purchase-2759.mp3'
-    : 'https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-688.mp3';
-  audio.play();
+  try {
+    const audio = new Audio();
+    audio.src = type === 'success'
+      ? 'https://assets.mixkit.co/sfx/preview/mixkit-cash-register-purchase-2759.mp3'
+      : 'https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-688.mp3';
+    audio.play().catch(e => console.log('Audio playback failed:', e));
+  } catch (e) {
+    console.log('Sound error:', e);
+  }
 }
 // --- EDIT SALE FUNCTIONALITY ---
 window.editSale = async function(saleId) {
