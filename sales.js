@@ -221,20 +221,16 @@ async function processScannedBarcode(barcode) {
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];
       const product = { id: doc.id, ...doc.data() };
-        // Get shipping cost directly from product record
-      const shippingCost = product.shipping || 0; // Use 0 as fallback
-      
-      // Add product to sale with shipping cost
-      addProductToSale(product, barcode, shippingCost);
-      
-      
-      if (product.stockQty <= 0) {
+        if (product.stockQty <= 0) {
         alert(`Product "${product.itemName}" is out of stock!`);
         playSound('error');
         barcodeInput.value = '';
         return;
       }
 
+      // Get shipping cost from product data (default to 0 if not set)
+      const shippingCost = product.shipping || 0;
+      
       // Check if we already have this product in sale
       const existingProductIndex = currentSaleItems.findIndex(
         item => item.id === product.id
@@ -243,9 +239,10 @@ async function processScannedBarcode(barcode) {
       if (existingProductIndex >= 0) {
         // Add barcode to existing product
         currentSaleItems[existingProductIndex].scannedBarcodes.push(barcode);
+        currentSaleItems[existingProductIndex].shippingCost += shippingCost;
         currentSaleItems[existingProductIndex].total += product.sellingPrice;
       } else {
-        // Add new product
+        // Add new product with shipping cost
         currentSaleItems.push({
           id: product.id,
           itemName: product.itemName,
@@ -253,6 +250,7 @@ async function processScannedBarcode(barcode) {
           costPrice: product.costPrice,
           category: product.category,
           scannedBarcodes: [barcode],
+          shippingCost: shippingCost,
           total: product.sellingPrice
         });
       }
@@ -271,7 +269,6 @@ async function processScannedBarcode(barcode) {
     barcodeInput.value = '';
   }
 }
-
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
@@ -292,6 +289,7 @@ function updateSaleSummary() {
         style="width: 70px;"
       />
       <span>Barcodes: ${item.scannedBarcodes.slice(0, 3).join(', ')}${item.scannedBarcodes.length > 3 ? '...' : ''}</span>
+       <span>Shipping: ${item.shippingCost.toFixed(2)}</span>
       <span>Total: <input 
         type="number" 
         class="sale-item-total" 
@@ -304,7 +302,7 @@ function updateSaleSummary() {
     `;
     container.appendChild(div);
   });
-
+ 
   // Attach event listeners for unit price inputs
   document.querySelectorAll('.sale-unit-price').forEach(input => {
     input.addEventListener('change', e => {
@@ -347,9 +345,8 @@ function updateSaleSummary() {
     });
   });
 
-  // Update grand total
-  const subtotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
-  document.getElementById('saleTotal').value = subtotal.toFixed(2);
+  // Update grand total (subtotal + shipping)
+  document.getElementById('saleTotal').value = (subtotal + totalShipping).toFixed(2);
 }
 
 
@@ -386,8 +383,7 @@ function setupSalesForm() {
     const saleType = document.getElementById('saleType')?.value || "cash";
     const dueDate = document.getElementById('dueDate')?.value || "";
     let initialPayment = document.getElementById('initialPayment') ? parseFloat(document.getElementById('initialPayment').value) : 0;
-    const shippingCost = parseFloat(document.getElementById('shippingCost').value) || 0;
-
+    
     if (!date || !clientName) {
       alert('Please fill all required fields!');
       return;
@@ -426,12 +422,9 @@ function setupSalesForm() {
         }
       }
 
-      // Process all items
-      for (const item of currentSaleItems) {
+      // Process all items   for (const item of currentSaleItems) {
         const itemRef = stockRef.doc(item.id);
-        const itemCost = item.costPrice * item.scannedBarcodes.length;
-        const itemShippingCost = shippingCost / currentSaleItems.length;
-        const totalItemCost = itemCost + itemShippingCost;
+        const totalItemCost = (item.costPrice * item.scannedBarcodes.length) + item.shippingCost;
         
         if (saleType === 'credit') {
           const creditSalesRef = db.collection('creditSales');
@@ -452,6 +445,7 @@ function setupSalesForm() {
             quantity: item.scannedBarcodes.length,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
+            shippingCost: item.shippingCost,
             totalCost: totalItemCost,
             totalSale: item.total,
             creditAmount: creditAmount,
@@ -476,6 +470,7 @@ function setupSalesForm() {
             quantity: item.scannedBarcodes.length,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
+            shippingCost: item.shippingCost,
             totalCost: totalItemCost,
             totalSale: item.total,
             saleType: balance <= 0 ? 'credit-paid' : 'credit',
@@ -497,6 +492,7 @@ function setupSalesForm() {
             quantity: item.scannedBarcodes.length,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
+            shippingCost: item.shippingCost,
             totalCost: totalItemCost,
             totalSale: item.total,
             saleType: "cash",
