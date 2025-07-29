@@ -35,6 +35,10 @@
         <input type="date" id="saleDate" required />
         <input type="text" id="clientName" placeholder="Client Name" required />
         <input type="text" id="clientPhone" placeholder="Client Phone" />
+        <div class="form-group">
+  <label for="shippingCost">Shipping Cost</label>
+  <input type="number" class="form-control" id="shippingCost" min="0" step="0.01" value="0">
+</div>
 
         <div class="scanner-input">
           <input type="text" id="saleBarcode" placeholder="Scan Barcode"
@@ -102,6 +106,7 @@
       <h2>Totals</h2>
       <p>Total Sales: <span id="totalSales">0</span> KSH</p>
       <p>Total Cost: <span id="totalCost">0</span> KSH</p>
+      <div>Total Shipping: Ksh.<span id="shippingCostTotal">0.00</span></div>
       <p><strong>Profit: <span id="profit">0</span> KSH</strong></p>
     </section>
   </main>
