@@ -17,6 +17,7 @@ window.db = db;
 let products = [];
 let currentSaleItems = [];
 let barcodeInputBuffer = '';
+let currentEditingSale = null;
 let barcodeTimeout;
 const BARCODE_DELAY = 50;
 
@@ -41,7 +42,8 @@ function initializeApp() {
   
   document.getElementById('saleDate').valueAsDate = new Date();
   document.getElementById('saleBarcode').focus();
-  
+  document.getElementById('saveEditSaleBtn').addEventListener('click', saveEditedSale);
+
   document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
 }
 
@@ -572,9 +574,102 @@ async function loadSalesRecords() {
 }
 
 // Add this editSale function:
-window.editSale = function(saleId) {
-  // Implement your edit functionality here
-  console.log("Editing sale:", saleId);
+// Then add this function to your code
+async function saveEditedSale() {
+  if (!currentEditingSale) return;
+  
+  try {
+    // Validate form
+    const form = document.getElementById('editSaleForm');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    
+    // Get updated values
+    const quantity = parseInt(document.getElementById('editQuantity').value);
+    const sellingPrice = parseFloat(document.getElementById('editSellingPrice').value);
+    const costPrice = parseFloat(document.getElementById('editCostPrice').value);
+  
+    
+    const updatedData = {
+      date: document.getElementById('editSaleDate').value,
+      clientName: document.getElementById('editClientName').value.trim(),
+      clientPhone: document.getElementById('editClientPhone').value.trim(),
+      quantity: quantity,
+      sellingPrice: sellingPrice,
+      costPrice: costPrice,
+      totalCost: (costPrice * quantity) + shippingCost,
+      totalSale: sellingPrice * quantity,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    // Update in Firestore
+    await db.collection('sales').doc(currentEditingSale.id).update(updatedData);
+    
+    // If this was a credit sale, update the credit record too
+    if (currentEditingSale.saleType?.includes('credit')) {
+      await updateCreditSaleRecord(currentEditingSale.transactionId, updatedData);
+    }
+    
+   
+    loadSalesRecords();
+    calculateProfit();
+    alert('Sale updated successfully!');
+    
+  } catch (error) {
+    console.error("Error updating sale:", error);
+    alert('Error updating sale: ' + error.message);
+  }
+}
+
+// Helper function to update credit records
+async function updateCreditSaleRecord(transactionId, updatedData) {
+  const creditQuery = await db.collection('creditSales')
+    .where('transactionId', '==', transactionId)
+    .limit(1)
+    .get();
+  
+  if (!creditQuery.empty) {
+    const creditDoc = creditQuery.docs[0];
+    await creditDoc.ref.update({
+      sellingPrice: updatedData.sellingPrice,
+      costPrice: updatedData.costPrice,
+      totalCost: updatedData.totalCost,
+      creditAmount: updatedData.totalSale,
+      balance: updatedData.totalSale - (creditDoc.data().amountPaid || 0)
+    });
+  }
+}
+// Add this function to your existing code
+window.editSale = async function(saleId) {
+  try {
+    // Show loading state (you can add a spinner here if needed)
+    document.getElementById('editSaleForm').reset();
+    
+    // Fetch the sale record
+    const saleDoc = await db.collection('sales').doc(saleId).get();
+    if (!saleDoc.exists) {
+      throw new Error('Sale record not found!');
+    }
+    
+    const saleData = saleDoc.data();
+    currentEditingSale = { id: saleId, ...saleData };
+    
+    // Populate the edit form
+    document.getElementById('editSaleId').value = saleId;
+    document.getElementById('editSaleDate').value = saleData.date || '';
+    document.getElementById('editClientName').value = saleData.clientName || '';
+    document.getElementById('editClientPhone').value = saleData.clientPhone || '';
+    document.getElementById('editItemName').value = saleData.itemName || '';
+    document.getElementById('editQuantity').value = saleData.quantity || 1;
+    document.getElementById('editSellingPrice').value = saleData.sellingPrice?.toFixed(2) || '';
+    document.getElementById('editCostPrice').value = saleData.costPrice?.toFixed(2) || '';
+    
+  } catch (error) {
+    console.error("Error preparing edit:", error);
+    alert('Error loading sale for editing: ' + error.message);
+  }
 };
 // --- GROUP RECEIPT (SALES ONLY) ---
 function gatherSalesForGroupReceipt(clientName, date) {
