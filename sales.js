@@ -556,23 +556,9 @@ async function loadSalesRecords() {
           <td>${sale.sellingPrice ? sale.sellingPrice.toFixed(2) : ''}</td>
           <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
           <td>
-            <div class="dropdown">
-              <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" 
-                      onclick="toggleDropdown(this)">
-                Actions
-              </button>
-              <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="#" onclick="printReceipt('${doc.id}')">
-                  <i class="bi bi-receipt"></i> Receipt
-                </a></li>
-                <li><a class="dropdown-item" href="#" onclick="refundSale('${doc.id}')">
-                  <i class="bi bi-arrow-counterclockwise"></i> Refund
-                </a></li>
-                <li><a class="dropdown-item" href="#" onclick="viewDetails('${doc.id}')">
-                  <i class="bi bi-eye"></i> Details
-                </a></li>
-              </ul>
-            </div>
+ <button class="btn btn-sm btn-primary" onclick="editSale('${doc.id}')">
+      <i class="bi bi-pencil"></i> Edit
+    </button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -584,28 +570,11 @@ async function loadSalesRecords() {
     tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error loading records</td></tr>';
   }
 }
-// Dropdown toggle function
-window.toggleDropdown = function(button) {
-  const menu = button.nextElementSibling;
-  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-};
 
-// Action functions for dropdown
-window.printReceipt = function(saleId) {
-  console.log("Print receipt for:", saleId);
-  // Implement receipt printing
-};
-
-window.refundSale = function(saleId) {
-  if (confirm("Are you sure you want to refund this sale?")) {
-    console.log("Processing refund for:", saleId);
-    // Implement refund logic
-  }
-};
-
-window.viewDetails = function(saleId) {
-  console.log("Viewing details for:", saleId);
-  // Implement details view
+// Add this editSale function:
+window.editSale = function(saleId) {
+  // Implement your edit functionality here
+  console.log("Editing sale:", saleId);
 };
 // --- GROUP RECEIPT (SALES ONLY) ---
 function gatherSalesForGroupReceipt(clientName, date) {
