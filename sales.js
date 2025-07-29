@@ -221,6 +221,12 @@ async function processScannedBarcode(barcode) {
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];
       const product = { id: doc.id, ...doc.data() };
+        // Get shipping cost directly from product record
+      const shippingCost = product.shipping || 0; // Use 0 as fallback
+      
+      // Add product to sale with shipping cost
+      addProductToSale(product, barcode, shippingCost);
+      
       
       if (product.stockQty <= 0) {
         alert(`Product "${product.itemName}" is out of stock!`);
@@ -560,41 +566,34 @@ window.editSale = async function(saleId) {
     alert('Error loading sale for editing: ' + error.message);
   }
 };
-
-async function saveEditedSale() {
-  if (!currentEditingSale) return;
+async function saveEditedSale(e) {
+  const saleId = e.target.dataset.id;
   
   try {
-    const form = document.getElementById('editSaleForm');
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
-    }
-    
-    const quantity = parseInt(document.getElementById('editQuantity').value);
-    const sellingPrice = parseFloat(document.getElementById('editSellingPrice').value);
-    const costPrice = parseFloat(document.getElementById('editCostPrice').value);
-    const shippingCost = parseFloat(document.getElementById('editShippingCost').value);
-    
     const updatedData = {
-      date: document.getElementById('editSaleDate').value,
+      date: document.getElementById('editDate').value,
       clientName: document.getElementById('editClientName').value.trim(),
       clientPhone: document.getElementById('editClientPhone').value.trim(),
-      quantity: quantity,
-      sellingPrice: sellingPrice,
-      costPrice: costPrice,
-      shippingCost: shippingCost,
-      totalCost: (costPrice * quantity) + shippingCost,
-      totalSale: sellingPrice * quantity,
+      quantity: parseInt(document.getElementById('editQuantity').value) || 1,
+      sellingPrice: parseFloat(document.getElementById('editSellingPrice').value) || 0,
+      totalSale: parseFloat(document.getElementById('editTotalSale').value) || 0,
       lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
     };
+
+    // Validate required fields
+    if (!updatedData.date || !updatedData.clientName) {
+      alert('Please fill in all required fields!');
+      return;
+    }
+
+    await db.collection('sales').doc(saleId).update(updatedData);
     
-    await db.collection('sales').doc(currentEditingSale.id).update(updatedData);
-    
-    if (currentEditingSale.saleType?.includes('credit')) {
+    // If this was a credit sale, update the credit record too
+    if (currentEditingSale?.saleType?.includes('credit')) {
       await updateCreditSaleRecord(currentEditingSale.transactionId, updatedData);
     }
-    
+
+    currentEditingSale = null;
     loadSalesRecords();
     calculateProfit();
     alert('Sale updated successfully!');
@@ -659,14 +658,31 @@ async function loadSalesRecords() {
       return;
     }
 
-    snapshot.forEach(doc => {
+      snapshot.forEach(doc => {
       const sale = doc.data();
-      // Apply client name filter if it exists
-      const matchesClient = !nameFilter || 
-                          (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter));
+      const isEditing = currentEditingSale?.id === doc.id;
       
-      if ((!sale.saleType || sale.saleType === 'cash' || sale.saleType === 'credit-paid') && matchesClient) {
-        const tr = document.createElement('tr');
+      const tr = document.createElement('tr');
+      
+      if (isEditing) {
+        // EDIT MODE
+        tr.innerHTML = `
+          <td><input type="date" value="${sale.date || ''}" class="edit-field" id="editDate"></td>
+          <td><input type="text" value="${sale.clientName || ''}" class="edit-field" id="editClientName"></td>
+          <td><input type="text" value="${sale.clientPhone || ''}" class="edit-field" id="editClientPhone"></td>
+          <td>${sale.itemName || ''}</td>
+          <td>${sale.scannedBarcode || 'N/A'}</td>
+          <td>${sale.category || ''}</td>
+          <td><input type="number" value="${sale.quantity || 1}" class="edit-field" id="editQuantity"></td>
+          <td><input type="number" step="0.01" value="${sale.sellingPrice || 0}" class="edit-field" id="editSellingPrice"></td>
+          <td><input type="number" step="0.01" value="${sale.totalSale || 0}" class="edit-field" id="editTotalSale"></td>
+          <td>
+            <button class="btn btn-sm btn-success save-edit-btn" data-id="${doc.id}">Save</button>
+            <button class="btn btn-sm btn-secondary cancel-edit-btn">Cancel</button>
+          </td>
+        `;
+      } else {
+        // VIEW MODE
         tr.innerHTML = `
           <td>${sale.date || ''}</td>
           <td>${sale.clientName || ''}</td>
@@ -675,16 +691,35 @@ async function loadSalesRecords() {
           <td>${sale.scannedBarcode || 'N/A'}</td>
           <td>${sale.category || ''}</td>
           <td>${sale.quantity || ''}</td>
-          <td>${sale.sellingPrice ? sale.sellingPrice.toFixed(2) : ''}</td>
-          <td>${sale.totalSale ? sale.totalSale.toFixed(2) : ''}</td>
+          <td>${sale.sellingPrice?.toFixed(2) || ''}</td>
+          <td>${sale.totalSale?.toFixed(2) || ''}</td>
           <td>
- <button class="btn btn-sm btn-primary" onclick="editSale('${doc.id}')">
-      <i class="bi bi-pencil"></i> Edit
-    </button>
+            <button class="btn btn-sm btn-primary edit-btn" data-id="${doc.id}">
+              <i class="bi bi-pencil"></i> Edit
+            </button>
           </td>
         `;
         tbody.appendChild(tr);
       }
+    });
+     // Set up event listeners for edit buttons
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        currentEditingSale = { id: e.target.dataset.id };
+        loadSalesRecords();
+      });
+    });
+
+    // Set up save/cancel buttons
+    document.querySelectorAll('.save-edit-btn').forEach(btn => {
+      btn.addEventListener('click', saveEditedSale);
+    });
+
+    document.querySelectorAll('.cancel-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentEditingSale = null;
+        loadSalesRecords();
+      });
     });
 
   } catch (error) {
