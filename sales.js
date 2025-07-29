@@ -104,7 +104,7 @@ async function loadProducts() {
   }
 }
 
-// --- BARCODE SCANNING --- 
+// --- BARCODE SCANNING ---
 function setupBarcodeScanner() {
   const barcodeInput = document.getElementById('saleBarcode');
   barcodeInput.addEventListener('keydown', e => {
@@ -123,15 +123,31 @@ function setupBarcodeScanner() {
       barcodeTimeout = setTimeout(() => barcodeInputBuffer = '', BARCODE_DELAY);
     }
   });
-  barcodeInput.addEventListener('input', e => {
+  
+  barcodeInput.addEventListener('input', async e => {
     const val = e.target.value.trim();
-    if (val.length >= 5) {
-      const searchTerm = val.slice(-5);
-      const matches = products.filter(product =>
-        product.barcodes?.some(bc => bc.endsWith(searchTerm))
-      );
+    if (val.length >= 6) { // Changed from 5 to 6 digits
+      const searchTerm = val.slice(-6); // Get last 6 digits
+      
+      // Find all products that have any barcode ending with these 6 digits
+      const matches = [];
+      for (const product of products) {
+        if (product.barcodes) {
+          const matchingBarcodes = product.barcodes.filter(bc => bc.endsWith(searchTerm));
+          if (matchingBarcodes.length > 0) {
+            // Include the full matching barcode in the result
+            matches.push({
+              product: product,
+              matchingBarcode: matchingBarcodes[0] // Use the first matching barcode
+            });
+          }
+        }
+      }
+      
       if (matches.length === 1) {
-        addProductFromManualInput(matches[0], val);
+        // Use the full barcode from the match
+        const fullBarcode = matches[0].matchingBarcode;
+        addProductFromManualInput(matches[0].product, fullBarcode);
         barcodeInput.value = '';
         barcodeInputBuffer = '';
       } else if (matches.length > 1) {
@@ -140,27 +156,39 @@ function setupBarcodeScanner() {
     }
   });
 }
-
 function addProductFromManualInput(product, inputBarcode) {
-  if (currentSaleItems.some(item => item.scannedBarcodes[0] === inputBarcode)) {
+  if (currentSaleItems.some(item => item.scannedBarcodes.includes(inputBarcode))) {
     alert(`Product "${product.itemName}" with barcode ${inputBarcode} already scanned!`);
     playSound('error');
     return;
   }
+  
   if ((product.stockQty || 0) <= 0) {
     alert(`Product "${product.itemName}" is out of stock!`);
     playSound('error');
     return;
   }
-  currentSaleItems.push({
-    id: product.id,
-    itemName: product.itemName,
-    sellingPrice: product.sellingPrice,
-    costPrice: product.costPrice,
-    category: product.category,
-    scannedBarcodes: [inputBarcode],
-    total: product.sellingPrice
-  });
+
+  // Check if we already have this product in sale
+  const existingProductIndex = currentSaleItems.findIndex(item => item.id === product.id);
+
+  if (existingProductIndex >= 0) {
+    // Add barcode to existing product
+    currentSaleItems[existingProductIndex].scannedBarcodes.push(inputBarcode);
+    currentSaleItems[existingProductIndex].total += product.sellingPrice;
+  } else {
+    // Add new product
+    currentSaleItems.push({
+      id: product.id,
+      itemName: product.itemName,
+      sellingPrice: product.sellingPrice,
+      costPrice: product.costPrice,
+      category: product.category,
+      scannedBarcodes: [inputBarcode],
+      total: product.sellingPrice
+    });
+  }
+
   updateSaleSummary();
   playSound('success');
 }
