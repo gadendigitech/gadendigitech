@@ -421,53 +421,55 @@ function setupSalesForm() {
       for (const item of currentSaleItems) {
         const itemRef = stockRef.doc(item.id);
         
-        if (saleType === 'credit') {
-          const creditSalesRef = db.collection('creditSales');
-          const creditAmount = item.total;
-          if (initialPayment > creditAmount) {
-            throw new Error('Initial payment cannot exceed total credit amount.');
-          }
-          const balance = creditAmount - initialPayment;
-          const newCreditSaleRef = creditSalesRef.doc();
-          batch.set(newCreditSaleRef, {
-            transactionId,
-            date,
-            clientName,
-            clientPhone,
-            scannedBarcode: item.scannedBarcodes[0],
-            itemName: item.itemName,
-            quantity: 1,
-            costPrice: item.costPrice,
-            sellingPrice: item.sellingPrice,
-            totalCost: item.costPrice,
-            creditAmount: creditAmount,
-            amountPaid: initialPayment,
-            balance: balance,
-            dueDate,
-            status: balance <= 0 ? 'Paid' : (initialPayment > 0 ? 'Partial' : 'Pending'),
-            category: item.category || '',
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          });
+if (saleType === 'credit') {
+  const creditSalesRef = db.collection('creditSales');
+  const creditAmount = item.total;
+  if (initialPayment > creditAmount) {
+    throw new Error('Initial payment cannot exceed total credit amount.');
+  }
+  const balance = creditAmount - initialPayment;
+  const newCreditSaleRef = creditSalesRef.doc();
+  batch.set(newCreditSaleRef, {
+    transactionId,
+    date,
+    clientName,
+    clientPhone,
+    scannedBarcode: item.scannedBarcodes[0],
+    itemName: item.itemName,
+    quantity: 1,
+    costPrice: item.costPrice,
+    sellingPrice: item.sellingPrice,
+    totalCost: item.costPrice,
+    totalSale: item.sellingPrice, // Add this line to track sale amount
+    creditAmount: creditAmount,
+    amountPaid: initialPayment,
+    balance: balance,
+    dueDate,
+    status: balance <= 0 ? 'Paid' : (initialPayment > 0 ? 'Partial' : 'Pending'),
+    category: item.category || '',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
         } else {
-          const salesRef = db.collection('sales');
-          const newSaleRef = salesRef.doc();
-          batch.set(newSaleRef, {
-            transactionId,
-            date,
-            clientName,
-            clientPhone,
-            scannedBarcode: item.scannedBarcodes[0],
-            itemName: item.itemName,
-            quantity: 1,
-            costPrice: item.costPrice,
-            sellingPrice: item.sellingPrice,
-            totalCost: item.costPrice,
-            totalSale: item.sellingPrice,
-            saleType: "cash",
-            category: item.category || '',
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          });
-        }
+  const salesRef = db.collection('sales');
+  const newSaleRef = salesRef.doc();
+  batch.set(newSaleRef, {
+    transactionId,
+    date,
+    clientName,
+    clientPhone,
+    scannedBarcode: item.scannedBarcodes[0],
+    itemName: item.itemName,
+    quantity: 1,
+    costPrice: item.costPrice,
+    sellingPrice: item.sellingPrice,
+    totalCost: item.costPrice,
+    totalSale: item.sellingPrice,
+    saleType: balance <= 0 ? 'credit-paid' : 'credit',
+    category: item.category || '',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
 
         // Update stock and barcodes
         batch.update(itemRef, {
