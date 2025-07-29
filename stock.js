@@ -16,6 +16,7 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 // Global variables
+let currentFilter = '';
 let currentCategory = 'All';
 let currentSubcategory = null;
 let editDocId = null;
@@ -100,6 +101,11 @@ function setupUI() {
       loadStock().catch(console.error);
     });
   });
+  document.getElementById('filterProductButton').addEventListener('click', applyProductFilter);
+  document.getElementById('clearProductFilterButton').addEventListener('click', clearProductFilter);
+  document.getElementById('filterProducts').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') applyProductFilter();
+  });
 
   // Form controls
   document.getElementById('addProductBtn').addEventListener('click', showAddProductForm);
@@ -159,6 +165,17 @@ function setupUI() {
   setupMultiBarcodeInput();
   setupMultiProductUI();
 }
+// Add these new filter functions
+function applyProductFilter() {
+  currentFilter = document.getElementById('filterProducts').value.trim().toLowerCase();
+  loadStock();
+}
+
+function clearProductFilter() {
+  document.getElementById('filterProducts').value = '';
+  currentFilter = '';
+  loadStock();
+}
 
 // ==================== STOCK LOADING ====================
 async function loadStock() {
@@ -167,10 +184,24 @@ async function loadStock() {
 
   try {
     let query = db.collection('stockmgt');
+    
+    // Apply category/subcategory filters
     if (currentCategory !== 'All') query = query.where('category', '==', currentCategory);
     if (currentSubcategory) query = query.where('subcategory', '==', currentSubcategory);
 
     const snapshot = await query.get();
+      // Apply client-side filtering for product name
+    const filteredDocs = currentFilter 
+      ? snapshot.docs.filter(doc => {
+          const data = doc.data();
+          return (
+            data.itemName?.toLowerCase().includes(currentFilter) ||
+            data.barcodes?.some(bc => bc.includes(currentFilter)) ||
+            data.category?.toLowerCase().includes(currentFilter)
+          );
+        })
+      : snapshot.docs;
+
     displayStockItems(snapshot.docs);
   } catch (error) {
     console.error("Stock loading error:", error);
