@@ -168,7 +168,7 @@ function setupUI() {
 // Add these new filter functions
 function applyProductFilter() {
   currentFilter = document.getElementById('filterProducts').value.trim().toLowerCase();
-  loadStock();
+  loadStock().catch(console.error); // Added error handling
 }
 
 function clearProductFilter() {
