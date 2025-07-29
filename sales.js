@@ -228,21 +228,14 @@ async function processScannedBarcode(barcode) {
         return;
       }
 
-      // Get shipping cost from product data (default to 0 if not set)
-      const shippingCost = product.shipping || 0;
-      
-      // Check if we already have this product in sale
       const existingProductIndex = currentSaleItems.findIndex(
         item => item.id === product.id
       );
 
       if (existingProductIndex >= 0) {
-        // Add barcode to existing product
         currentSaleItems[existingProductIndex].scannedBarcodes.push(barcode);
-        currentSaleItems[existingProductIndex].shippingCost += shippingCost;
         currentSaleItems[existingProductIndex].total += product.sellingPrice;
       } else {
-        // Add new product with shipping cost
         currentSaleItems.push({
           id: product.id,
           itemName: product.itemName,
@@ -250,7 +243,6 @@ async function processScannedBarcode(barcode) {
           costPrice: product.costPrice,
           category: product.category,
           scannedBarcodes: [barcode],
-          shippingCost: shippingCost,
           total: product.sellingPrice
         });
       }
@@ -269,13 +261,23 @@ async function processScannedBarcode(barcode) {
     barcodeInput.value = '';
   }
 }
+
+
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
   container.innerHTML = '';
   
+  let subtotal = 0;
+  let totalShipping = 0;
+
   currentSaleItems.forEach((item, index) => {
     const quantity = item.scannedBarcodes.length;
+    subtotal += item.total;
+    if (item.shippingCost) {
+      totalShipping += item.shippingCost;
+    }
+    
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
@@ -289,7 +291,7 @@ function updateSaleSummary() {
         style="width: 70px;"
       />
       <span>Barcodes: ${item.scannedBarcodes.slice(0, 3).join(', ')}${item.scannedBarcodes.length > 3 ? '...' : ''}</span>
-       <span>Shipping: ${item.shippingCost.toFixed(2)}</span>
+      ${item.shippingCost ? `<span>Shipping: ${item.shippingCost.toFixed(2)}</span>` : ''}
       <span>Total: <input 
         type="number" 
         class="sale-item-total" 
@@ -302,8 +304,7 @@ function updateSaleSummary() {
     `;
     container.appendChild(div);
   });
- 
-  // Attach event listeners for unit price inputs
+
   document.querySelectorAll('.sale-unit-price').forEach(input => {
     input.addEventListener('change', e => {
       const index = parseInt(e.target.dataset.index);
@@ -311,14 +312,13 @@ function updateSaleSummary() {
       if (!isNaN(newUnitPrice) && newUnitPrice >= 0) {
         currentSaleItems[index].sellingPrice = newUnitPrice;
         currentSaleItems[index].total = newUnitPrice * currentSaleItems[index].scannedBarcodes.length;
-        updateSaleSummary(); // Refresh to update totals and inputs
+        updateSaleSummary();
       } else {
         e.target.value = currentSaleItems[index].sellingPrice.toFixed(2);
       }
     });
   });
 
-  // Attach event listeners for total inputs
   document.querySelectorAll('.sale-item-total').forEach(input => {
     input.addEventListener('change', e => {
       const index = parseInt(e.target.dataset.index);
@@ -336,7 +336,6 @@ function updateSaleSummary() {
     });
   });
 
-  // Remove item functionality
   document.querySelectorAll('.remove-item').forEach(button => {
     button.addEventListener('click', e => {
       const index = parseInt(e.target.dataset.index);
@@ -345,10 +344,8 @@ function updateSaleSummary() {
     });
   });
 
-  // Update grand total (subtotal + shipping)
   document.getElementById('saleTotal').value = (subtotal + totalShipping).toFixed(2);
 }
-
 
 // --- STOCK & BARCODE SYNCHRONIZATION ---
 async function synchronizeStockAfterSale(currentSaleItems) {
@@ -423,8 +420,9 @@ function setupSalesForm() {
       }
 
       // Process all items   for (const item of currentSaleItems) {
+             for (const item of currentSaleItems) {
         const itemRef = stockRef.doc(item.id);
-        const totalItemCost = (item.costPrice * item.scannedBarcodes.length) + item.shippingCost;
+        const totalItemCost = (item.costPrice * item.scannedBarcodes.length) + (item.shippingCost || 0);
         
         if (saleType === 'credit') {
           const creditSalesRef = db.collection('creditSales');
@@ -445,7 +443,7 @@ function setupSalesForm() {
             quantity: item.scannedBarcodes.length,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
-            shippingCost: item.shippingCost,
+            shippingCost: item.shippingCost || 0,
             totalCost: totalItemCost,
             totalSale: item.total,
             creditAmount: creditAmount,
@@ -457,7 +455,6 @@ function setupSalesForm() {
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
           
-          // Create corresponding sales record
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
           batch.set(newSaleRef, {
@@ -470,16 +467,14 @@ function setupSalesForm() {
             quantity: item.scannedBarcodes.length,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
-            shippingCost: item.shippingCost,
+            shippingCost: item.shippingCost || 0,
             totalCost: totalItemCost,
             totalSale: item.total,
             saleType: balance <= 0 ? 'credit-paid' : 'credit',
-            shippingCost: itemShippingCost,
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
-          // Cash sale
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
           batch.set(newSaleRef, {
@@ -492,17 +487,15 @@ function setupSalesForm() {
             quantity: item.scannedBarcodes.length,
             costPrice: item.costPrice,
             sellingPrice: item.sellingPrice,
-            shippingCost: item.shippingCost,
+            shippingCost: item.shippingCost || 0,
             totalCost: totalItemCost,
             totalSale: item.total,
             saleType: "cash",
-            shippingCost: itemShippingCost,
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
 
-        // Update stock and barcodes
         batch.update(itemRef, {
           stockQty: firebase.firestore.FieldValue.increment(-item.scannedBarcodes.length),
           barcodes: firebase.firestore.FieldValue.arrayRemove(...item.scannedBarcodes)
@@ -526,6 +519,7 @@ function setupSalesForm() {
     }
   });
 }
+
 
 function playSound(type) {
   const audio = new Audio();
@@ -562,30 +556,39 @@ window.editSale = async function(saleId) {
     alert('Error loading sale for editing: ' + error.message);
   }
 };
-async function saveEditedSale(e) {
-  const saleId = e.target.dataset.id;
+async function saveEditedSale() {
+  if (!currentEditingSale) return;
   
   try {
+    const form = document.getElementById('editSaleForm');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    
+    const quantity = parseInt(document.getElementById('editQuantity').value) || 1;
+    const sellingPrice = parseFloat(document.getElementById('editSellingPrice').value) || 0;
+    const shippingCost = parseFloat(document.getElementById('editShippingCost').value) || 0;
+    
     const updatedData = {
-      date: document.getElementById('editDate').value,
+      date: document.getElementById('editSaleDate').value,
       clientName: document.getElementById('editClientName').value.trim(),
       clientPhone: document.getElementById('editClientPhone').value.trim(),
-      quantity: parseInt(document.getElementById('editQuantity').value) || 1,
-      sellingPrice: parseFloat(document.getElementById('editSellingPrice').value) || 0,
-      totalSale: parseFloat(document.getElementById('editTotalSale').value) || 0,
+      quantity: quantity,
+      sellingPrice: sellingPrice,
+      shippingCost: shippingCost,
+      totalSale: sellingPrice * quantity,
       lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    // Validate required fields
     if (!updatedData.date || !updatedData.clientName) {
       alert('Please fill in all required fields!');
       return;
     }
 
-    await db.collection('sales').doc(saleId).update(updatedData);
+    await db.collection('sales').doc(currentEditingSale.id).update(updatedData);
     
-    // If this was a credit sale, update the credit record too
-    if (currentEditingSale?.saleType?.includes('credit')) {
+    if (currentEditingSale.saleType?.includes('credit')) {
       await updateCreditSaleRecord(currentEditingSale.transactionId, updatedData);
     }
 
@@ -610,9 +613,7 @@ async function updateCreditSaleRecord(transactionId, updatedData) {
     const creditDoc = creditQuery.docs[0];
     await creditDoc.ref.update({
       sellingPrice: updatedData.sellingPrice,
-      costPrice: updatedData.costPrice,
-      totalCost: updatedData.totalCost,
-      creditAmount: updatedData.totalSale,
+      totalSale: updatedData.totalSale,
       balance: updatedData.totalSale - (creditDoc.data().amountPaid || 0)
     });
   }
