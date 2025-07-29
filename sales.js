@@ -373,17 +373,20 @@ function setupSalesForm() {
       alert('Please scan at least one item!');
       return;
     }
+    
     const date = document.getElementById('saleDate').value;
     const clientName = document.getElementById('clientName').value.trim();
     const clientPhone = document.getElementById('clientPhone').value.trim();
-    const saleType = document.getElementById('saleType') ? document.getElementById('saleType').value : "cash";
-    const dueDate = document.getElementById('dueDate') ? document.getElementById('dueDate').value : "";
+    const saleType = document.getElementById('saleType')?.value || "cash";
+    const dueDate = document.getElementById('dueDate')?.value || "";
     let initialPayment = document.getElementById('initialPayment') ? parseFloat(document.getElementById('initialPayment').value) : 0;
+    const shippingCost = parseFloat(document.getElementById('shippingCost').value) || 0;
 
     if (!date || !clientName) {
       alert('Please fill all required fields!');
       return;
     }
+    
     if (saleType === 'credit') {
       if (!dueDate) {
         alert('Please provide a due date for credit sales.');
@@ -402,7 +405,7 @@ function setupSalesForm() {
       const transactionId = db.collection('sales').doc().id;
       const stockRef = db.collection('stockmgt');
 
-      // First verify all items have sufficient stock and valid barcodes
+      // Verify stock and barcodes first
       for (const item of currentSaleItems) {
         const productDoc = await stockRef.doc(item.id).get();
         const currentBarcodes = productDoc.data().barcodes || [];
@@ -420,56 +423,82 @@ function setupSalesForm() {
       // Process all items
       for (const item of currentSaleItems) {
         const itemRef = stockRef.doc(item.id);
+        const itemCost = item.costPrice * item.scannedBarcodes.length;
+        const itemShippingCost = shippingCost / currentSaleItems.length;
+        const totalItemCost = itemCost + itemShippingCost;
         
-if (saleType === 'credit') {
-  const creditSalesRef = db.collection('creditSales');
-  const creditAmount = item.total;
-  if (initialPayment > creditAmount) {
-    throw new Error('Initial payment cannot exceed total credit amount.');
-  }
-  const balance = creditAmount - initialPayment;
-  const newCreditSaleRef = creditSalesRef.doc();
-  batch.set(newCreditSaleRef, {
-    transactionId,
-    date,
-    clientName,
-    clientPhone,
-    scannedBarcode: item.scannedBarcodes[0],
-    itemName: item.itemName,
-    quantity: 1,
-    costPrice: item.costPrice,
-    sellingPrice: item.sellingPrice,
-    totalCost: item.costPrice,
-    totalSale: item.sellingPrice, // Add this line to track sale amount
-    creditAmount: creditAmount,
-    amountPaid: initialPayment,
-    balance: balance,
-    dueDate,
-    status: balance <= 0 ? 'Paid' : (initialPayment > 0 ? 'Partial' : 'Pending'),
-    category: item.category || '',
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  });
+        if (saleType === 'credit') {
+          const creditSalesRef = db.collection('creditSales');
+          const creditAmount = item.total;
+          if (initialPayment > creditAmount) {
+            throw new Error('Initial payment cannot exceed total credit amount.');
+          }
+          const balance = creditAmount - initialPayment;
+          const newCreditSaleRef = creditSalesRef.doc();
+          
+          batch.set(newCreditSaleRef, {
+            transactionId,
+            date,
+            clientName,
+            clientPhone,
+            scannedBarcode: item.scannedBarcodes[0],
+            itemName: item.itemName,
+            quantity: item.scannedBarcodes.length,
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+            totalCost: totalItemCost,
+            totalSale: item.total,
+            creditAmount: creditAmount,
+            amountPaid: initialPayment,
+            balance: balance,
+            dueDate,
+            status: balance <= 0 ? 'Paid' : (initialPayment > 0 ? 'Partial' : 'Pending'),
+            category: item.category || '',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          
+          // Create corresponding sales record
+          const salesRef = db.collection('sales');
+          const newSaleRef = salesRef.doc();
+          batch.set(newSaleRef, {
+            transactionId,
+            date,
+            clientName,
+            clientPhone,
+            scannedBarcode: item.scannedBarcodes[0],
+            itemName: item.itemName,
+            quantity: item.scannedBarcodes.length,
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+            totalCost: totalItemCost,
+            totalSale: item.total,
+            saleType: balance <= 0 ? 'credit-paid' : 'credit',
+            shippingCost: itemShippingCost,
+            category: item.category || '',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
         } else {
-  const salesRef = db.collection('sales');
-  const newSaleRef = salesRef.doc();
-  batch.set(newSaleRef, {
-    transactionId,
-    date,
-    clientName,
-    clientPhone,
-    scannedBarcode: item.scannedBarcodes[0],
-    itemName: item.itemName,
-    quantity: 1,
-    costPrice: item.costPrice,
-    sellingPrice: item.sellingPrice,
-    totalCost: item.costPrice,
-    totalSale: item.sellingPrice,
-    saleType: balance <= 0 ? 'credit-paid' : 'credit',
-    category: item.category || '',
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  });
-}
-
+          // Cash sale
+          const salesRef = db.collection('sales');
+          const newSaleRef = salesRef.doc();
+          batch.set(newSaleRef, {
+            transactionId,
+            date,
+            clientName,
+            clientPhone,
+            scannedBarcode: item.scannedBarcodes[0],
+            itemName: item.itemName,
+            quantity: item.scannedBarcodes.length,
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+            totalCost: totalItemCost,
+            totalSale: item.total,
+            saleType: "cash",
+            shippingCost: itemShippingCost,
+            category: item.category || '',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
 
         // Update stock and barcodes
         batch.update(itemRef, {
@@ -488,7 +517,6 @@ if (saleType === 'credit') {
       document.getElementById('saleBarcode').focus();
       loadProducts();
       loadSalesRecords();
-      if (typeof loadCreditSales === 'function') loadCreditSales();
       calculateProfit();
     } catch (error) {
       alert('Error processing sale: ' + error.message);
@@ -503,6 +531,96 @@ function playSound(type) {
     ? 'https://assets.mixkit.co/sfx/preview/mixkit-cash-register-purchase-2759.mp3'
     : 'https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-688.mp3';
   audio.play();
+}
+// --- EDIT SALE FUNCTIONALITY ---
+window.editSale = async function(saleId) {
+  try {
+    document.getElementById('editSaleForm').reset();
+    
+    const saleDoc = await db.collection('sales').doc(saleId).get();
+    if (!saleDoc.exists) {
+      throw new Error('Sale record not found!');
+    }
+    
+    const saleData = saleDoc.data();
+    currentEditingSale = { id: saleId, ...saleData };
+    
+    document.getElementById('editSaleId').value = saleId;
+    document.getElementById('editSaleDate').value = saleData.date || '';
+    document.getElementById('editClientName').value = saleData.clientName || '';
+    document.getElementById('editClientPhone').value = saleData.clientPhone || '';
+    document.getElementById('editItemName').value = saleData.itemName || '';
+    document.getElementById('editQuantity').value = saleData.quantity || 1;
+    document.getElementById('editSellingPrice').value = saleData.sellingPrice?.toFixed(2) || '';
+    document.getElementById('editCostPrice').value = saleData.costPrice?.toFixed(2) || '';
+    document.getElementById('editShippingCost').value = saleData.shippingCost?.toFixed(2) || 0;
+    
+  } catch (error) {
+    console.error("Error preparing edit:", error);
+    alert('Error loading sale for editing: ' + error.message);
+  }
+};
+
+async function saveEditedSale() {
+  if (!currentEditingSale) return;
+  
+  try {
+    const form = document.getElementById('editSaleForm');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    
+    const quantity = parseInt(document.getElementById('editQuantity').value);
+    const sellingPrice = parseFloat(document.getElementById('editSellingPrice').value);
+    const costPrice = parseFloat(document.getElementById('editCostPrice').value);
+    const shippingCost = parseFloat(document.getElementById('editShippingCost').value);
+    
+    const updatedData = {
+      date: document.getElementById('editSaleDate').value,
+      clientName: document.getElementById('editClientName').value.trim(),
+      clientPhone: document.getElementById('editClientPhone').value.trim(),
+      quantity: quantity,
+      sellingPrice: sellingPrice,
+      costPrice: costPrice,
+      shippingCost: shippingCost,
+      totalCost: (costPrice * quantity) + shippingCost,
+      totalSale: sellingPrice * quantity,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('sales').doc(currentEditingSale.id).update(updatedData);
+    
+    if (currentEditingSale.saleType?.includes('credit')) {
+      await updateCreditSaleRecord(currentEditingSale.transactionId, updatedData);
+    }
+    
+    loadSalesRecords();
+    calculateProfit();
+    alert('Sale updated successfully!');
+    
+  } catch (error) {
+    console.error("Error updating sale:", error);
+    alert('Error updating sale: ' + error.message);
+  }
+}
+
+async function updateCreditSaleRecord(transactionId, updatedData) {
+  const creditQuery = await db.collection('creditSales')
+    .where('transactionId', '==', transactionId)
+    .limit(1)
+    .get();
+  
+  if (!creditQuery.empty) {
+    const creditDoc = creditQuery.docs[0];
+    await creditDoc.ref.update({
+      sellingPrice: updatedData.sellingPrice,
+      costPrice: updatedData.costPrice,
+      totalCost: updatedData.totalCost,
+      creditAmount: updatedData.totalSale,
+      balance: updatedData.totalSale - (creditDoc.data().amountPaid || 0)
+    });
+  }
 }
 
 // --- LOAD SALES RECORDS ---
@@ -572,107 +690,8 @@ async function loadSalesRecords() {
   } catch (error) {
     console.error("Error loading sales:", error);
     tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error loading records</td></tr>';
-  }
-}
-
-// Add this editSale function:
-// Then add this function to your code
-async function saveEditedSale() {
-  if (!currentEditingSale) return;
-  
-  try {
-    // Validate form
-    const form = document.getElementById('editSaleForm');
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
     }
-    
-    // Get updated values
-    const quantity = parseInt(document.getElementById('editQuantity').value);
-    const sellingPrice = parseFloat(document.getElementById('editSellingPrice').value);
-    const costPrice = parseFloat(document.getElementById('editCostPrice').value);
-  
-    
-    const updatedData = {
-      date: document.getElementById('editSaleDate').value,
-      clientName: document.getElementById('editClientName').value.trim(),
-      clientPhone: document.getElementById('editClientPhone').value.trim(),
-      quantity: quantity,
-      sellingPrice: sellingPrice,
-      costPrice: costPrice,
-      totalCost: (costPrice * quantity) + shippingCost,
-      totalSale: sellingPrice * quantity,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    
-    // Update in Firestore
-    await db.collection('sales').doc(currentEditingSale.id).update(updatedData);
-    
-    // If this was a credit sale, update the credit record too
-    if (currentEditingSale.saleType?.includes('credit')) {
-      await updateCreditSaleRecord(currentEditingSale.transactionId, updatedData);
-    }
-    
-   
-    loadSalesRecords();
-    calculateProfit();
-    alert('Sale updated successfully!');
-    
-  } catch (error) {
-    console.error("Error updating sale:", error);
-    alert('Error updating sale: ' + error.message);
-  }
-}
-
-// Helper function to update credit records
-async function updateCreditSaleRecord(transactionId, updatedData) {
-  const creditQuery = await db.collection('creditSales')
-    .where('transactionId', '==', transactionId)
-    .limit(1)
-    .get();
-  
-  if (!creditQuery.empty) {
-    const creditDoc = creditQuery.docs[0];
-    await creditDoc.ref.update({
-      sellingPrice: updatedData.sellingPrice,
-      costPrice: updatedData.costPrice,
-      totalCost: updatedData.totalCost,
-      creditAmount: updatedData.totalSale,
-      balance: updatedData.totalSale - (creditDoc.data().amountPaid || 0)
-    });
-  }
-}
-// Add this function to your existing code
-window.editSale = async function(saleId) {
-  try {
-    // Show loading state (you can add a spinner here if needed)
-    document.getElementById('editSaleForm').reset();
-    
-    // Fetch the sale record
-    const saleDoc = await db.collection('sales').doc(saleId).get();
-    if (!saleDoc.exists) {
-      throw new Error('Sale record not found!');
-    }
-    
-    const saleData = saleDoc.data();
-    currentEditingSale = { id: saleId, ...saleData };
-    
-    // Populate the edit form
-    document.getElementById('editSaleId').value = saleId;
-    document.getElementById('editSaleDate').value = saleData.date || '';
-    document.getElementById('editClientName').value = saleData.clientName || '';
-    document.getElementById('editClientPhone').value = saleData.clientPhone || '';
-    document.getElementById('editItemName').value = saleData.itemName || '';
-    document.getElementById('editQuantity').value = saleData.quantity || 1;
-    document.getElementById('editSellingPrice').value = saleData.sellingPrice?.toFixed(2) || '';
-    document.getElementById('editCostPrice').value = saleData.costPrice?.toFixed(2) || '';
-    
-  } catch (error) {
-    console.error("Error preparing edit:", error);
-    alert('Error loading sale for editing: ' + error.message);
-  }
-};
+  } 
 // --- GROUP RECEIPT (SALES ONLY) ---
 function gatherSalesForGroupReceipt(clientName, date) {
   return db.collection('sales')
@@ -802,7 +821,6 @@ async function calculateProfit() {
   try {
     let query = db.collection('sales').orderBy('timestamp', 'desc');
     
-    // Apply the same date filters as loadSalesRecords()
     if (fromDate && toDate) {
       const startDate = new Date(fromDate);
       const endDate = new Date(toDate);
@@ -821,22 +839,24 @@ async function calculateProfit() {
     const salesSnap = await query.get();
     let totalSales = 0;
     let totalCost = 0;
+    let totalShipping = 0;
 
     salesSnap.forEach(doc => {
       const sale = doc.data();
-      // Apply client name filter if it exists
       const matchesClient = !nameFilter || 
                           (sale.clientName && sale.clientName.toLowerCase().includes(nameFilter));
       
       if ((!sale.saleType || sale.saleType === "cash" || sale.saleType === "credit-paid") && matchesClient) {
         totalSales += sale.totalSale || 0;
         totalCost += sale.totalCost || 0;
+        totalShipping += sale.shippingCost || 0;
       }
     });
 
     const totalProfit = totalSales - totalCost;
     document.getElementById('totalSales').textContent = totalSales.toFixed(2);
     document.getElementById('totalCost').textContent = totalCost.toFixed(2);
+    document.getElementById('shippingCostTotal').textContent = totalShipping.toFixed(2);
     document.getElementById('profit').textContent = totalProfit.toFixed(2);
     const profitElement = document.getElementById('profit');
     profitElement.style.color = totalProfit >= 0 ? 'green' : 'red';
@@ -845,7 +865,15 @@ async function calculateProfit() {
     alert('Error calculating profit. Check console for details.');
   }
 }
-window.calculateProfit = calculateProfit;
+
+// --- UTILITY FUNCTIONS ---
+function playSound(type) {
+  const audio = new Audio();
+  audio.src = type === 'success'
+    ? 'https://assets.mixkit.co/sfx/preview/mixkit-cash-register-purchase-2759.mp3'
+    : 'https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-688.mp3';
+  audio.play();
+}
 
 // --- ON LOAD ---
 window.onload = () => {
