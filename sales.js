@@ -198,39 +198,40 @@ async function handleManualInput(last6Digits) {
 }
 
 async function processScannedBarcode(fullBarcode) {
-  let product = products.find(p => (p.barcodes || []).includes(fullBarcode));
+  try {
+    let product = products.find(p => (p.barcodes || []).includes(fullBarcode));
 
-  if (!product) {
-    try {
-      const snapshot = await db.collection('stockmgt')
-        .where('barcodes', 'array-contains', fullBarcode)
-        .limit(1)
-        .get();
+    if (!product) {
+      try {
+        const snapshot = await db.collection('stockmgt')
+          .where('barcodes', 'array-contains', fullBarcode)
+          .limit(1)
+          .get();
 
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        product = { id: doc.id, ...doc.data() };
-        products.push(product);
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          product = { id: doc.id, ...doc.data() };
+          products.push(product);
+        }
+      } catch (error) {
+        console.error('Firestore barcode lookup error:', error);
+        alert('Error searching product by barcode.');
+        playSound('error');
+        return;
       }
-    } catch (error) {
-      console.error('Firestore barcode lookup error:', error);
-      alert('Error searching product by barcode.');
-      playSound('error');
-      return;
     }
-  }
 
-  if (product) {
-    await addProductToSale(product, fullBarcode);
-  } else {
-    alert(`Product with barcode '${fullBarcode}' not found.`);
-    playSound('error');
-  }
-} catch (error) {
+    if (product) {
+      await addProductToSale(product, fullBarcode);
+    } else {
+      alert(`Product with barcode '${fullBarcode}' not found.`);
+      playSound('error');
+    }
+  } catch (error) {
     console.error('Barcode processing error:', error);
     alert('Error processing barcode. Please try again.');
   }
-
+}
 
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
