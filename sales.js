@@ -138,8 +138,7 @@ async function loadProducts() {
     products = []; // Reset to empty array
   }
 }
-
-// --- BARCODE SCANNING ---
+  // --- BARCODE SCANNING ---
 function setupBarcodeScanner() {
   const barcodeInput = document.getElementById('saleBarcode');
   
@@ -152,7 +151,6 @@ function setupBarcodeScanner() {
   let lastInputTime = 0;
   const SCANNER_TIMEOUT = 100; // ms between keypresses to detect scanner
 
-  // Handle all input through a single event listener
   barcodeInput.addEventListener('input', async (e) => {
     const input = e.target.value.trim();
     const now = Date.now();
@@ -172,7 +170,7 @@ function setupBarcodeScanner() {
       return;
     }
 
-    // Process scanner input (Enter key or timeout)
+    // Process scanner input
     if (isScannerInput && input.length > 0) {
       await processScannedBarcode(input);
       e.target.value = '';
@@ -184,15 +182,14 @@ function setupBarcodeScanner() {
   barcodeInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      isScannerInput = true; // Force treat as scanner input
+      isScannerInput = true;
+      barcodeInput.dispatchEvent(new Event('input')); // Trigger input event
     }
   });
 
-  // Maintain focus
   barcodeInput.focus();
 }
 
-// Handle manual 6-digit input
 async function handleManualInput(last6Digits) {
   // 1. Check local products first
   const localMatch = products.find(p => 
@@ -227,7 +224,6 @@ async function handleManualInput(last6Digits) {
   }
 }
 
-// Process full barcode (from scanner)
 async function processScannedBarcode(fullBarcode) {
   try {
     // 1. Check local products first
@@ -262,7 +258,6 @@ async function processScannedBarcode(fullBarcode) {
   }
 }
 
-// Unified product addition
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
 
@@ -280,19 +275,23 @@ async function addProductToSale(product, barcode) {
     return;
   }
 
-  // Add to sale
+  // Add to sale with all product details
   const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
   
   if (existingIndex >= 0) {
+    // Update existing item
     currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
     currentSaleItems[existingIndex].total += product.sellingPrice;
   } else {
+    // Add new item with complete product information
     currentSaleItems.push({
       id: product.id,
       itemName: product.itemName,
       sellingPrice: product.sellingPrice,
       costPrice: product.costPrice,
       category: product.category,
+      stockQty: product.stockQty,
+      barcodes: product.barcodes,
       scannedBarcodes: [barcode],
       total: product.sellingPrice
     });
@@ -305,13 +304,53 @@ async function addProductToSale(product, barcode) {
   const barcodeInput = document.getElementById('saleBarcode');
   if (barcodeInput) barcodeInput.focus();
 }
+
+function updateSaleSummary() {
+  const container = document.getElementById('saleItemsContainer');
+  container.innerHTML = '';
+  
+  let subtotal = 0;
+
+  currentSaleItems.forEach((item, index) => {
+    const quantity = item.scannedBarcodes.length;
+    subtotal += item.total;
+    
+    const div = document.createElement('div');
+    div.className = 'sale-item';
+    div.innerHTML = `
+      <div class="product-info">
+        <strong>${item.itemName}</strong>
+        <div>Category: ${item.category}</div>
+        <div>Barcode: ${item.scannedBarcodes[0]}</div>
+      </div>
+      <div class="price-info">
+        <div>Price: ${item.sellingPrice.toFixed(2)}</div>
+        <div>Qty: ${quantity}</div>
+        <div>Total: ${item.total.toFixed(2)}</div>
+      </div>
+      <button class="remove-item" data-index="${index}">×</button>
+    `;
+    container.appendChild(div);
+  });
+
+  document.getElementById('saleTotal').value = subtotal.toFixed(2);
+  
+  // Add event listeners for remove buttons
+  document.querySelectorAll('.remove-item').forEach(button => {
+    button.addEventListener('click', (e) => {
+      const index = parseInt(e.target.dataset.index);
+      currentSaleItems.splice(index, 1);
+      updateSaleSummary();
+    });
+  });
+}
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
   container.innerHTML = '';
   
   let subtotal = 0;
-  let totalShipping = 0;
+  
 
   currentSaleItems.forEach((item, index) => {
     const quantity = item.scannedBarcodes.length;
@@ -333,10 +372,7 @@ function updateSaleSummary() {
         style="width: 70px;"
       />
       <span>Barcodes: ${item.scannedBarcodes.slice(0, 3).join(', ')}${item.scannedBarcodes.length > 3 ? '...' : ''}</span>
-      ${item.shippingCost ? `<span>Shipping: ${item.shippingCost.toFixed(2)}</span>` : ''}
-      <span>Total: <input 
-        type="number" 
-        class="sale-item-total" 
+     
         data-index="${index}" 
         value="${item.total.toFixed(2)}" 
         min="0" step="0.01" 
@@ -386,7 +422,7 @@ function updateSaleSummary() {
     });
   });
 
-  document.getElementById('saleTotal').value = (subtotal + totalShipping).toFixed(2);
+  document.getElementById('saleTotal').value = subtotal.toFixed(2);
 }
 
 // --- STOCK & BARCODE SYNCHRONIZATION ---
