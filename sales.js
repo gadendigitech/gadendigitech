@@ -198,89 +198,93 @@ async function handleManualInput(last6Digits) {
 }
 
 async function processScannedBarcode(fullBarcode) {
+  // --- BARCODE SCANNING ---
+async function processScannedBarcode(barcode) {
+  if (!barcode) return;
+  
+  const barcodeInput = document.getElementById('saleBarcode');
+  if (!barcodeInput) return;
+
   try {
-    let product = products.find(p => (p.barcodes || []).includes(fullBarcode));
+    // First check local products array
+    let product = products.find(p => 
+      Array.isArray(p.barcodes) && p.barcodes.includes(barcode)
+    );
 
+    // If not found locally, query Firestore
     if (!product) {
-      try {
-        const snapshot = await db.collection('stockmgt')
-          .where('barcodes', 'array-contains', fullBarcode)
-          .limit(1)
-          .get();
+      const snapshot = await db.collection('stockmgt')
+        .where('barcodes', 'array-contains', barcode)
+        .limit(1)
+        .get();
 
-        if (!snapshot.empty) {
-          const doc = snapshot.docs[0];
-          product = { id: doc.id, ...doc.data() };
-          products.push(product);
-        }
-      } catch (error) {
-        console.error('Firestore barcode lookup error:', error);
-        alert('Error searching product by barcode.');
-        playSound('error');
-        return;
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        product = { id: doc.id, ...doc.data() };
+        // Add to local products array for future reference
+        products.push(product);
       }
     }
 
     if (product) {
-      await addProductToSale(product, fullBarcode);
+      // Check stock
+      if ((product.stockQty || 0) <= 0) {
+        alert(`Product "${product.itemName}" is out of stock!`);
+        playSound('error');
+        return;
+      }
+
+      // Check if already scanned in current sale
+      if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
+        alert(`Product "${product.itemName}" already scanned!`);
+        playSound('error');
+        return;
+      }
+
+      // Add to current sale
+      const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
+      
+      if (existingIndex >= 0) {
+        // Update existing item
+        currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
+        currentSaleItems[existingIndex].total = 
+          currentSaleItems[existingIndex].sellingPrice * 
+          currentSaleItems[existingIndex].scannedBarcodes.length;
+      } else {
+        // Add new item
+        currentSaleItems.push({
+          id: product.id,
+          itemName: product.itemName,
+          sellingPrice: product.sellingPrice,
+          costPrice: product.costPrice,
+          category: product.category,
+          stockQty: product.stockQty,
+          scannedBarcodes: [barcode],
+          total: product.sellingPrice
+        });
+      }
+
+      updateSaleSummary();
+      playSound('success');
+      barcodeInput.value = '';
     } else {
-      alert(`Product with barcode '${fullBarcode}' not found.`);
+      alert(`Product with barcode "${barcode}" not found!`);
       playSound('error');
     }
   } catch (error) {
-    console.error('Barcode processing error:', error);
+    console.error("Barcode processing error:", error);
     alert('Error processing barcode. Please try again.');
+    barcodeInput.value = '';
   }
 }
 
-async function addProductToSale(product, barcode) {
-  if (!product || !barcode) return;
-
-  // Prevent duplicate barcode scan
-  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
-    alert(`Product "${product.itemName}" already scanned!`);
-    playSound('error');
-    return;
-  }
-
-  // Stock check
-  if ((product.stockQty || 0) <= 0) {
-    alert(`Product "${product.itemName}" is out of stock!`);
-    playSound('error');
-    return;
-  }
-
-  const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
-
-  if (existingIndex >= 0) {
-    currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
-    currentSaleItems[existingIndex].total = currentSaleItems[existingIndex].sellingPrice * currentSaleItems[existingIndex].scannedBarcodes.length;
-  } else {
-    currentSaleItems.push({
-      id: product.id,
-      itemName: product.itemName,
-      sellingPrice: product.sellingPrice,
-      costPrice: product.costPrice,
-      category: product.category,
-      stockQty: product.stockQty,
-      barcodes: product.barcodes,
-      scannedBarcodes: [barcode],
-      total: product.sellingPrice
-    });
-  }
-
-  updateSaleSummary();
-  playSound('success');
-
-  const barcodeInput = document.getElementById('saleBarcode');
-  if (barcodeInput) barcodeInput.focus();
-}
 
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
+  if (!container) return;
+  
   container.innerHTML = '';
-
   let subtotal = 0;
 
   currentSaleItems.forEach((item, index) => {
@@ -321,8 +325,10 @@ function updateSaleSummary() {
     container.appendChild(div);
   });
 
-  document.getElementById('saleTotal').value = subtotal.toFixed(2);
-
+  const saleTotalElement = document.getElementById('saleTotal');
+  if (saleTotalElement) {
+    saleTotalElement.value = subtotal.toFixed(2);
+  }
   // Event listeners for price/unit changes
   container.querySelectorAll('.sale-unit-price').forEach(input => {
     input.addEventListener('change', e => {
@@ -646,38 +652,31 @@ async function updateCreditSaleRecord(transactionId, updatedData) {
   }
 }
 
-// --- LOAD SALES RECORDS ---
-async function loadSalesRecords() {
+// --- LOAD SALES RECORDS ---async function loadSalesRecords() {
   const tbody = document.getElementById('salesRecordsTableBody');
   const fromDate = document.getElementById('filterSalesFromDate')?.value;
   const toDate = document.getElementById('filterSalesToDate')?.value;
-  const nameFilter = document.getElementById('filterSalesClientName')?.value.trim().toLowerCase();
+  const nameFilter = document.getElementById('filterSalesClientName')?.value?.trim().toLowerCase();
 
   tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
 
   try {
-    console.log("Loading sales records filter:", { fromDate, toDate, nameFilter });
-
     let query = db.collection('sales').orderBy('timestamp', 'desc');
 
-    if (fromDate && toDate) {
+    // Apply date filters
+    if (fromDate) {
       const startDate = new Date(fromDate);
-      const endDate = new Date(toDate);
-      endDate.setDate(endDate.getDate() + 1); 
-      query = query.where('timestamp', '>=', startDate)
-                   .where('timestamp', '<=', endDate);
-    } else if (fromDate) {
-      const startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
       query = query.where('timestamp', '>=', startDate);
-    } else if (toDate) {
+    }
+    
+    if (toDate) {
       const endDate = new Date(toDate);
-      endDate.setDate(endDate.getDate() + 1);
+      endDate.setHours(23, 59, 59, 999);
       query = query.where('timestamp', '<=', endDate);
     }
 
     const snapshot = await query.get();
-    console.log(`Fetched ${snapshot.size} sales records`);
-
     tbody.innerHTML = '';
 
     if (snapshot.empty) {
@@ -685,66 +684,47 @@ async function loadSalesRecords() {
       return;
     }
 
-    snapshot.forEach(doc => {
+    // Filter by client name if provided
+    const filteredDocs = nameFilter 
+      ? snapshot.docs.filter(doc => {
+          const data = doc.data();
+          return data.clientName?.toLowerCase().includes(nameFilter);
+        })
+      : snapshot.docs;
+
+    if (filteredDocs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center">No matching records found</td></tr>';
+      return;
+    }
+
+    filteredDocs.forEach(doc => {
       const sale = doc.data();
-      const isEditing = currentEditingSale?.id === doc.id;
       const tr = document.createElement('tr');
-
-      if (isEditing) {
-        tr.innerHTML = `
-          <td><input type="date" value="${sale.date || ''}" class="edit-field" id="editDate"></td>
-          <td><input type="text" value="${sale.clientName || ''}" class="edit-field" id="editClientName"></td>
-          <td><input type="text" value="${sale.clientPhone || ''}" class="edit-field" id="editClientPhone"></td>
-          <td>${sale.itemName || ''}</td>
-          <td>${sale.scannedBarcode || 'N/A'}</td>
-          <td>${sale.category || ''}</td>
-          <td><input type="number" value="${sale.quantity || 1}" class="edit-field" id="editQuantity"></td>
-          <td><input type="number" step="0.01" value="${sale.sellingPrice || 0}" class="edit-field" id="editSellingPrice"></td>
-          <td><input type="number" step="0.01" value="${sale.totalSale || 0}" class="edit-field" id="editTotalSale"></td>
-          <td>
-            <button class="btn btn-sm btn-success save-edit-btn" data-id="${doc.id}">Save</button>
-            <button class="btn btn-sm btn-secondary cancel-edit-btn">Cancel</button>
-          </td>
-        `;
-      } else {
-        tr.innerHTML = `
-          <td>${sale.date || ''}</td>
-          <td>${sale.clientName || ''}</td>
-          <td>${sale.clientPhone || ''}</td>
-          <td>${sale.itemName || ''}</td>
-          <td>${sale.scannedBarcode || 'N/A'}</td>
-          <td>${sale.category || ''}</td>
-          <td>${sale.quantity || ''}</td>
-          <td>${sale.sellingPrice?.toFixed(2) || ''}</td>
-          <td>${sale.totalSale?.toFixed(2) || ''}</td>
-          <td>
-            <button class="btn btn-sm btn-primary edit-btn" data-id="${doc.id}">
-              <i class="bi bi-pencil"></i> Edit
-            </button>
-          </td>
-        `;
-      }
-
+      
+      tr.innerHTML = `
+        <td>${sale.date || ''}</td>
+        <td>${sale.clientName || ''}</td>
+        <td>${sale.clientPhone || ''}</td>
+        <td>${sale.itemName || ''}</td>
+        <td>${sale.scannedBarcode || 'N/A'}</td>
+        <td>${sale.category || ''}</td>
+        <td>${sale.quantity || ''}</td>
+        <td>${sale.sellingPrice?.toFixed(2) || ''}</td>
+        <td>${sale.totalSale?.toFixed(2) || ''}</td>
+        <td>
+          <button class="btn btn-sm btn-primary edit-btn" data-id="${doc.id}">
+            <i class="bi bi-pencil"></i> Edit
+          </button>
+        </td>
+      `;
+      
       tbody.appendChild(tr);
     });
 
-    // Setup button listeners after rendering
+    // Add event listeners to edit buttons
     document.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        const id = e.currentTarget.dataset.id;
-        currentEditingSale = { id };
-        loadSalesRecords();
-      });
-    });
-
-    document.querySelectorAll('.save-edit-btn').forEach(btn => {
-      btn.addEventListener('click', saveEditedSale);
-    });
-
-    document.querySelectorAll('.cancel-edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentEditingSale = null;
-        loadSalesRecords();
+      btn.addEventListener('click', (e) => {
+        editSale(e.target.dataset.id);
       });
     });
 
