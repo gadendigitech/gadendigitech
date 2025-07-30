@@ -149,9 +149,9 @@ function setupBarcodeScanner() {
 
   let isScannerInput = false;
   let lastInputTime = 0;
-  const SCANNER_TIMEOUT = 100; // ms between keypresses to detect scanner
+  const SCANNER_TIMEOUT = 50; // ms between keypresses to detect scanner
 
-  barcodeInput.addEventListener('input', async (e) => {
+  barcodeInput.addEventListener('keydown', async (e) => {
     const input = e.target.value.trim();
     const now = Date.now();
     const isFastInput = (now - lastInputTime) < SCANNER_TIMEOUT;
@@ -199,39 +199,20 @@ async function handleManualInput(last6Digits) {
   if (localMatch) {
     const fullBarcode = localMatch.barcodes.find(bc => bc.endsWith(last6Digits));
     await addProductToSale(localMatch, fullBarcode);
-    return;
-  }
-
-  // 2. If no local match, search Firestore
-  try {
-    const snapshot = await db.collection('stockmgt')
-      .where('barcodes', 'array-contains-any', [last6Digits])
-      .limit(1)
-      .get();
-
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      const product = { id: doc.id, ...doc.data() };
-      const fullBarcode = product.barcodes.find(bc => bc.endsWith(last6Digits));
-      await addProductToSale(product, fullBarcode);
     } else {
-      alert('No product matches the last 6 digits entered');
-      playSound('error');
-    }
-  } catch (error) {
-    console.error('Error searching products:', error);
-    alert('Error searching products. Please try again.');
+    alert('No product matches the last 6 digits entered');
+    playSound('error');
   }
 }
 
+
+// --- PROCESS FULL BARCODE SCANNING ---
 async function processScannedBarcode(fullBarcode) {
   try {
-    // 1. Check local products first
-    let product = products.find(p => 
-      p.barcodes?.includes(fullBarcode)
-    );
-    
-    // 2. If not found, query Firestore
+    // Search local products first
+    let product = products.find(p => p.barcodes?.includes(fullBarcode));
+
+    // If not found, query Firestore by full barcode (array-contains)
     if (!product) {
       const snapshot = await db.collection('stockmgt')
         .where('barcodes', 'array-contains', fullBarcode)
@@ -241,12 +222,13 @@ async function processScannedBarcode(fullBarcode) {
       if (!snapshot.empty) {
         const doc = snapshot.docs[0];
         product = { id: doc.id, ...doc.data() };
-        // Add to local cache
+        // Add to local cache for future
         products.push(product);
       }
     }
 
     if (product) {
+      // Before adding, you might refresh product stockQty from Firestore here if you want real-time accuracy
       await addProductToSale(product, fullBarcode);
     } else {
       alert(`Product with barcode ${fullBarcode} not found!`);
@@ -532,7 +514,29 @@ function setupSalesForm() {
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
-          
+             // ONLY add to regular sales if FULLY PAID
+          if (balance <= 0) {
+            const salesRef = db.collection('sales');
+            const newSaleRef = salesRef.doc();
+            batch.set(newSaleRef, {
+              transactionId,
+              date,
+              clientName,
+              clientPhone,
+              scannedBarcode: item.scannedBarcodes[0],
+              itemName: item.itemName,
+              quantity: item.scannedBarcodes.length,
+              costPrice: item.costPrice,
+              sellingPrice: item.sellingPrice,
+              shippingCost: item.shippingCost || 0,
+              totalCost: totalItemCost,
+              totalSale: item.total,
+              saleType: "credit-paid",
+              category: item.category || '',
+              timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        } else {
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
           batch.set(newSaleRef, {
