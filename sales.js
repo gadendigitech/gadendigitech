@@ -119,101 +119,163 @@ function setupClearFilterButtons() {
 async function loadProducts() {
   try {
     const snapshot = await db.collection('stockmgt').get();
-    products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    products = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        itemName: data.itemName || 'Unknown',
+        sellingPrice: data.sellingPrice || 0,
+        costPrice: data.costPrice || 0,
+        category: data.category || '',
+        stockQty: data.stockQty || 0,
+        barcodes: Array.isArray(data.barcodes) ? data.barcodes : []
+      };
+    });
+    console.log(`Loaded ${products.length} products`);
   } catch (error) {
-    alert('Error loading products');
+    console.error('Failed to load products:', error);
+    alert('Failed to load product inventory. Please refresh the page.');
+    products = []; // Reset to empty array
   }
 }
 
 // --- BARCODE SCANNING ---
 function setupBarcodeScanner() {
   const barcodeInput = document.getElementById('saleBarcode');
-  barcodeInput.addEventListener('keydown', e => {
+  
+  if (!barcodeInput) {
+    console.error('Barcode input element not found!');
+    return;
+  }
+
+  let barcodeBuffer = '';
+  let lastKeyTime = 0;
+  const BARCODE_DELAY = 50; // ms between keypresses
+  const MIN_DIGITS = 6; // Minimum digits to trigger auto-search
+
+  // Handle physical barcode scanner input (fast typing + Enter)
+  barcodeInput.addEventListener('keydown', async (e) => {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    
     clearTimeout(barcodeTimeout);
+    
+    const now = Date.now();
+    
+    // Reset buffer if too much time between keypresses
+    if (now - lastKeyTime > BARCODE_DELAY * 3) {
+      barcodeBuffer = '';
+    }
+    lastKeyTime = now;
+    
+    // Handle Enter key
     if (e.key === 'Enter') {
       e.preventDefault();
-      const code = barcodeInputBuffer.trim();
-      barcodeInputBuffer = '';
-      if (code.length > 0) {
-        processScannedBarcode(code);
+      if (barcodeBuffer.length > 0) {
+        await processScannedBarcode(barcodeBuffer);
+        barcodeBuffer = '';
+        barcodeInput.value = '';
       }
       return;
     }
-    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      barcodeInputBuffer += e.key;
-      barcodeTimeout = setTimeout(() => barcodeInputBuffer = '', BARCODE_DELAY);
+    
+    // Only append printable characters
+    if (e.key.length === 1) {
+      barcodeBuffer += e.key;
+      barcodeTimeout = setTimeout(() => {
+        barcodeBuffer = '';
+      }, BARCODE_DELAY);
     }
   });
-  
-  barcodeInput.addEventListener('input', async e => {
-    const val = e.target.value.trim();
-    if (val.length >= 6) { // Changed from 5 to 6 digits
-      const searchTerm = val.slice(-6); // Get last 6 digits
+
+  // Handle manual input (including 6-digit partial matches)
+  barcodeInput.addEventListener('input', async (e) => {
+    const input = e.target.value.trim();
+    
+    // Only process when we have at least 6 digits
+    if (input.length >= MIN_DIGITS) {
+      const last6Digits = input.slice(-MIN_DIGITS);
       
-      // Find all products that have any barcode ending with these 6 digits
-      const matches = [];
-      for (const product of products) {
-        if (product.barcodes) {
-          const matchingBarcodes = product.barcodes.filter(bc => bc.endsWith(searchTerm));
-          if (matchingBarcodes.length > 0) {
-            // Include the full matching barcode in the result
-            matches.push({
-              product: product,
-              matchingBarcode: matchingBarcodes[0] // Use the first matching barcode
-            });
-          }
+      // Try to find matching barcode in local products first
+      const matchedProduct = findProductByPartialBarcode(last6Digits);
+      
+      if (matchedProduct) {
+        const fullBarcode = matchedProduct.barcodes.find(bc => bc.endsWith(last6Digits));
+        await addProductToSale(matchedProduct, fullBarcode);
+        barcodeInput.value = '';
+        barcodeBuffer = '';
+      } else {
+        // If no local match, try Firestore
+        try {
+          await processScannedBarcode(input);
+          barcodeInput.value = '';
+          barcodeBuffer = '';
+        } catch (error) {
+          console.error('Barcode processing failed:', error);
         }
       }
-      
-      if (matches.length === 1) {
-        // Use the full barcode from the match
-        const fullBarcode = matches[0].matchingBarcode;
-        addProductFromManualInput(matches[0].product, fullBarcode);
-        barcodeInput.value = '';
-        barcodeInputBuffer = '';
-      } else if (matches.length > 1) {
-        alert('More than one product matches; please provide more digits.');
-      }
     }
   });
+
+  barcodeInput.focus();
 }
-function addProductFromManualInput(product, inputBarcode) {
-  if (currentSaleItems.some(item => item.scannedBarcodes.includes(inputBarcode))) {
-    alert(`Product "${product.itemName}" with barcode ${inputBarcode} already scanned!`);
+
+// Helper function to find product by partial barcode match
+function findProductByPartialBarcode(partialBarcode) {
+  if (!partialBarcode || partialBarcode.length < 6) return null;
+  
+  const matches = products.filter(product => 
+    product.barcodes && 
+    product.barcodes.some(bc => bc.endsWith(partialBarcode))
+  );
+  
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// Modified product adding function
+async function addProductToSale(product, barcode) {
+  if (!product || !barcode) return;
+
+  // Check if already scanned
+  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
+    alert(`Product "${product.itemName}" already scanned!`);
     playSound('error');
     return;
   }
-  
+
+  // Check stock
   if ((product.stockQty || 0) <= 0) {
     alert(`Product "${product.itemName}" is out of stock!`);
     playSound('error');
     return;
   }
 
-  // Check if we already have this product in sale
-  const existingProductIndex = currentSaleItems.findIndex(item => item.id === product.id);
-
-  if (existingProductIndex >= 0) {
-    // Add barcode to existing product
-    currentSaleItems[existingProductIndex].scannedBarcodes.push(inputBarcode);
-    currentSaleItems[existingProductIndex].total += product.sellingPrice;
+  // Add to sale
+  const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
+  
+  if (existingIndex >= 0) {
+    // Update existing item
+    currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
+    currentSaleItems[existingIndex].total += product.sellingPrice;
   } else {
-    // Add new product
+    // Add new item
     currentSaleItems.push({
       id: product.id,
       itemName: product.itemName,
       sellingPrice: product.sellingPrice,
       costPrice: product.costPrice,
       category: product.category,
-      scannedBarcodes: [inputBarcode],
+      scannedBarcodes: [barcode],
       total: product.sellingPrice
     });
   }
-
+  
   updateSaleSummary();
   playSound('success');
+  
+  // Return focus to barcode input
+  const barcodeInput = document.getElementById('saleBarcode');
+  if (barcodeInput) barcodeInput.focus();
 }
-
 async function processScannedBarcode(barcode) {
   if (!barcode || barcode.length < 3) {
     console.log('Invalid barcode - too short');
