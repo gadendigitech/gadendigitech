@@ -287,45 +287,6 @@ async function addProductToSale(product, barcode) {
   if (barcodeInput) barcodeInput.focus();
 }
 
-function updateSaleSummary() {
-  const container = document.getElementById('saleItemsContainer');
-  container.innerHTML = '';
-  
-  let subtotal = 0;
-
-  currentSaleItems.forEach((item, index) => {
-    const quantity = item.scannedBarcodes.length;
-    subtotal += item.total;
-    
-    const div = document.createElement('div');
-    div.className = 'sale-item';
-    div.innerHTML = `
-      <div class="product-info">
-        <strong>${item.itemName}</strong>
-        <div>Category: ${item.category}</div>
-        <div>Barcode: ${item.scannedBarcodes[0]}</div>
-      </div>
-      <div class="price-info">
-        <div>Price: ${item.sellingPrice.toFixed(2)}</div>
-        <div>Qty: ${quantity}</div>
-        <div>Total: ${item.total.toFixed(2)}</div>
-      </div>
-      <button class="remove-item" data-index="${index}">×</button>
-    `;
-    container.appendChild(div);
-  });
-
-  document.getElementById('saleTotal').value = subtotal.toFixed(2);
-  
-  // Add event listeners for remove buttons
-  document.querySelectorAll('.remove-item').forEach(button => {
-    button.addEventListener('click', (e) => {
-      const index = parseInt(e.target.dataset.index);
-      currentSaleItems.splice(index, 1);
-      updateSaleSummary();
-    });
-  });
-}
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
@@ -697,9 +658,10 @@ async function loadSalesRecords() {
   tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
 
   try {
+    console.log("Loading sales records with filters:", { fromDate, toDate, nameFilter });
+
     let query = db.collection('sales').orderBy('timestamp', 'desc');
-    
-    // Apply date filters
+
     if (fromDate && toDate) {
       const startDate = new Date(fromDate);
       const endDate = new Date(toDate);
@@ -716,6 +678,8 @@ async function loadSalesRecords() {
     }
 
     const snapshot = await query.get();
+    console.log(`Fetched ${snapshot.size} sales records`);
+
     tbody.innerHTML = '';
 
     if (snapshot.empty) {
@@ -723,14 +687,13 @@ async function loadSalesRecords() {
       return;
     }
 
-      snapshot.forEach(doc => {
+    snapshot.forEach(doc => {
       const sale = doc.data();
       const isEditing = currentEditingSale?.id === doc.id;
-      
+
       const tr = document.createElement('tr');
-      
+
       if (isEditing) {
-        // EDIT MODE
         tr.innerHTML = `
           <td><input type="date" value="${sale.date || ''}" class="edit-field" id="editDate"></td>
           <td><input type="text" value="${sale.clientName || ''}" class="edit-field" id="editClientName"></td>
@@ -747,7 +710,6 @@ async function loadSalesRecords() {
           </td>
         `;
       } else {
-        // VIEW MODE
         tr.innerHTML = `
           <td>${sale.date || ''}</td>
           <td>${sale.clientName || ''}</td>
@@ -764,22 +726,28 @@ async function loadSalesRecords() {
             </button>
           </td>
         `;
-        tbody.appendChild(tr);
       }
+
+      tbody.appendChild(tr); // Always append the row
     });
-     // Set up event listeners for edit buttons
+
+    // Setup event listeners for the dynamically created buttons
+
+    // Edit buttons
     document.querySelectorAll('.edit-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        currentEditingSale = { id: e.target.dataset.id };
+        const id = e.currentTarget.dataset.id;
+        currentEditingSale = { id };
         loadSalesRecords();
       });
     });
 
-    // Set up save/cancel buttons
+    // Save edit buttons
     document.querySelectorAll('.save-edit-btn').forEach(btn => {
       btn.addEventListener('click', saveEditedSale);
     });
 
+    // Cancel edit buttons
     document.querySelectorAll('.cancel-edit-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         currentEditingSale = null;
@@ -790,8 +758,9 @@ async function loadSalesRecords() {
   } catch (error) {
     console.error("Error loading sales:", error);
     tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error loading records</td></tr>';
-    }
-  } 
+  }
+}
+
 // --- GROUP RECEIPT (SALES ONLY) ---
 function gatherSalesForGroupReceipt(clientName, date) {
   return db.collection('sales')
