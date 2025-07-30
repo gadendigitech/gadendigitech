@@ -25,37 +25,44 @@ auth.onAuthStateChanged(user => {
   if (!user) {
     window.location = 'index.html';
   } else {
-    // Wait for DOM to be ready
-    document.addEventListener('DOMContentLoaded', () => {
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
       initializeApp();
-    });
+    } else {
+      document.addEventListener('DOMContentLoaded', initializeApp);
+    }
   }
 });
-function initializeApp() {
-  setupFilterButtons();
-  setupClearFilterButtons();
-  setupSaleTypeToggle();
-  
-  loadProducts();
-  setupBarcodeScanner();
-  setupSalesForm();
-  loadSalesRecords();
-  calculateProfit();
-  
- // Safely set date
-  const saleDateEl = document.getElementById('saleDate');
-  if (saleDateEl) saleDateEl.valueAsDate = new Date();
-  
-  // Safely focus barcode input
-  const barcodeInput = document.getElementById('saleBarcode');
-  if (barcodeInput) barcodeInput.focus();
-  
-  // Safely add event listeners
-  const saveEditBtn = document.getElementById('saveEditSaleBtn');
-  if (saveEditBtn) saveEditBtn.addEventListener('click', saveEditedSale);
+// Modify your initializeApp function to ensure products are loaded first
+async function initializeApp() {
+  try {
+    await loadProducts(); // Wait for products to load first
+    
+    setupFilterButtons();
+    setupClearFilterButtons();
+    setupSaleTypeToggle();
+    setupBarcodeScanner();
+    setupSalesForm();
+    loadSalesRecords();
+    calculateProfit();
+    
+    const saleDateEl = document.getElementById('saleDate');
+    if (saleDateEl) saleDateEl.valueAsDate = new Date();
+    
+    const barcodeInput = document.getElementById('saleBarcode');
+    if (barcodeInput) {
+      barcodeInput.focus();
+      barcodeInput.value = ''; // Clear any existing value
+    }
+    
+    const saveEditBtn = document.getElementById('saveEditSaleBtn');
+    if (saveEditBtn) saveEditBtn.addEventListener('click', saveEditedSale);
 
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) logoutBtn.addEventListener('click', () => auth.signOut());
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', () => auth.signOut());
+  } catch (error) {
+    console.error('Initialization error:', error);
+    alert('Error initializing application. Check console for details.');
+  }
 }
 
 // --- SALE TYPE TOGGLE WITH CREDIT FIELDS ---
@@ -208,45 +215,51 @@ function addProductFromManualInput(product, inputBarcode) {
 }
 
 async function processScannedBarcode(barcode) {
-  if (!barcode) return;
-  
-  // Check if this barcode exists in ANY scannedBarcodes array
-  const alreadyScanned = currentSaleItems.some(item => 
-    item.scannedBarcodes.includes(barcode)
-  );
-  
-  if (alreadyScanned) {
-    alert('This barcode has already been scanned in this sale!');
-    playSound('error');
-    document.getElementById('saleBarcode').value = '';
+  if (!barcode || barcode.length < 3) {
+    console.log('Invalid barcode - too short');
     return;
   }
 
-  const barcodeInput = document.getElementById('saleBarcode');
-  
-  try {
-    const snapshot = await db.collection('stockmgt')
-      .where('barcodes', 'array-contains', barcode)
-      .limit(1)
-      .get();
+  // Check if already scanned
+  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
+    alert('This barcode has already been scanned in this sale!');
+    playSound('error');
+    return;
+  }
 
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      const product = { id: doc.id, ...doc.data() };
-        if (product.stockQty <= 0) {
+  try {
+    // First check in local products array
+    let product = products.find(p => 
+      p.barcodes && p.barcodes.includes(barcode)
+    );
+    
+    // If not found locally, query Firestore
+    if (!product) {
+      const snapshot = await db.collection('stockmgt')
+        .where('barcodes', 'array-contains', barcode)
+        .limit(1)
+        .get();
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        product = { id: doc.id, ...doc.data() };
+      }
+    }
+
+    if (product) {
+      // Check stock
+      if ((product.stockQty || 0) <= 0) {
         alert(`Product "${product.itemName}" is out of stock!`);
         playSound('error');
-        barcodeInput.value = '';
         return;
       }
 
-      const existingProductIndex = currentSaleItems.findIndex(
-        item => item.id === product.id
-      );
-
-      if (existingProductIndex >= 0) {
-        currentSaleItems[existingProductIndex].scannedBarcodes.push(barcode);
-        currentSaleItems[existingProductIndex].total += product.sellingPrice;
+      // Add to sale
+      const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
+      
+      if (existingIndex >= 0) {
+        currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
+        currentSaleItems[existingIndex].total += product.sellingPrice;
       } else {
         currentSaleItems.push({
           id: product.id,
@@ -261,20 +274,18 @@ async function processScannedBarcode(barcode) {
 
       updateSaleSummary();
       playSound('success');
-      barcodeInput.value = '';
     } else {
       alert(`Product with barcode ${barcode} not found in stock!`);
       playSound('error');
-      barcodeInput.value = '';
     }
   } catch (error) {
     console.error("Barcode processing error:", error);
-    alert('Error fetching product. Check connectivity.');
-    barcodeInput.value = '';
+    alert('Error processing barcode. Check console for details.');
+  } finally {
+    document.getElementById('saleBarcode').value = '';
+    document.getElementById('saleBarcode').focus();
   }
 }
-
-
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
