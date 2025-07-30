@@ -42,8 +42,8 @@ async function initializeApp() {
     setupSaleTypeToggle();
     setupBarcodeScanner();
     setupSalesForm();
-    loadSalesRecords();
-    calculateProfit();
+   await loadSalesRecords();
+   await calculateProfit();
     
     const saleDateEl = document.getElementById('saleDate');
     if (saleDateEl) saleDateEl.valueAsDate = new Date();
