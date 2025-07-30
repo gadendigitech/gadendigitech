@@ -226,11 +226,11 @@ async function processScannedBarcode(fullBarcode) {
     alert(`Product with barcode '${fullBarcode}' not found.`);
     playSound('error');
   }
-}catch (error) {
+} catch (error) {
     console.error('Barcode processing error:', error);
     alert('Error processing barcode. Please try again.');
   }
-}
+
 
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
