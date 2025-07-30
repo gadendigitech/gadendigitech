@@ -433,19 +433,20 @@ function setupSalesForm() {
       alert('Please scan at least one item!');
       return;
     }
-    
+
+    // Gather form data as before ...
     const date = document.getElementById('saleDate').value;
     const clientName = document.getElementById('clientName').value.trim();
     const clientPhone = document.getElementById('clientPhone').value.trim();
     const saleType = document.getElementById('saleType')?.value || "cash";
     const dueDate = document.getElementById('dueDate')?.value || "";
     let initialPayment = document.getElementById('initialPayment') ? parseFloat(document.getElementById('initialPayment').value) : 0;
-    
+
     if (!date || !clientName) {
       alert('Please fill all required fields!');
       return;
     }
-    
+
     if (saleType === 'credit') {
       if (!dueDate) {
         alert('Please provide a due date for credit sales.');
@@ -464,7 +465,6 @@ function setupSalesForm() {
       const transactionId = db.collection('sales').doc().id;
       const stockRef = db.collection('stockmgt');
 
-      // Verify stock and barcodes first
       for (const item of currentSaleItems) {
         const productDoc = await stockRef.doc(item.id).get();
         const currentBarcodes = productDoc.data().barcodes || [];
@@ -473,17 +473,16 @@ function setupSalesForm() {
         if (missingBarcodes.length > 0) {
           throw new Error(`Barcodes not found in product ${item.itemName}: ${missingBarcodes.join(', ')}`);
         }
-        
+
         if ((productDoc.data().stockQty || 0) < item.scannedBarcodes.length) {
           throw new Error(`Cannot complete sale: "${item.itemName}" only has ${productDoc.data().stockQty} in stock!`);
         }
       }
 
-      // Process all items   for (const item of currentSaleItems) {
-             for (const item of currentSaleItems) {
+      for (const item of currentSaleItems) {
         const itemRef = stockRef.doc(item.id);
         const totalItemCost = (item.costPrice * item.scannedBarcodes.length) + (item.shippingCost || 0);
-        
+
         if (saleType === 'credit') {
           const creditSalesRef = db.collection('creditSales');
           const creditAmount = item.total;
@@ -492,7 +491,8 @@ function setupSalesForm() {
           }
           const balance = creditAmount - initialPayment;
           const newCreditSaleRef = creditSalesRef.doc();
-          
+
+          // Always add to creditSales
           batch.set(newCreditSaleRef, {
             transactionId,
             date,
@@ -514,7 +514,8 @@ function setupSalesForm() {
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
-             // ONLY add to regular sales if FULLY PAID
+
+          // Only add to sales collection if fully paid
           if (balance <= 0) {
             const salesRef = db.collection('sales');
             const newSaleRef = salesRef.doc();
@@ -531,31 +532,12 @@ function setupSalesForm() {
               shippingCost: item.shippingCost || 0,
               totalCost: totalItemCost,
               totalSale: item.total,
-              saleType: "credit-paid",
+              saleType: 'credit-paid',
               category: item.category || '',
               timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
           }
-        } else {
-          const salesRef = db.collection('sales');
-          const newSaleRef = salesRef.doc();
-          batch.set(newSaleRef, {
-            transactionId,
-            date,
-            clientName,
-            clientPhone,
-            scannedBarcode: item.scannedBarcodes[0],
-            itemName: item.itemName,
-            quantity: item.scannedBarcodes.length,
-            costPrice: item.costPrice,
-            sellingPrice: item.sellingPrice,
-            shippingCost: item.shippingCost || 0,
-            totalCost: totalItemCost,
-            totalSale: item.total,
-            saleType: balance <= 0 ? 'credit-paid' : 'credit',
-            category: item.category || '',
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          });
+
         } else {
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
