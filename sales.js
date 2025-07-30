@@ -4,7 +4,7 @@ if (!firebase.apps.length) {
     apiKey: "AIzaSyD2WZnOuDXBLXR7uAq_LTK46q7tr13Mqvw",
     authDomain: "gadendigitech.firebaseapp.com",
     projectId: "gadendigitech",
-    storageBucket: "gadendigitech.firebasestorage.app",
+    storageBucket: "gadendigitech.appspot.com",
     messagingSenderId: "134032321432",
     appId: "1:134032321432:web:dedbb18980661259ed",
     measurementId: "G-VLG9G3FCP0"
@@ -25,50 +25,55 @@ auth.onAuthStateChanged(user => {
   if (!user) {
     window.location = 'index.html';
   } else {
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
       initializeApp();
     } else {
       document.addEventListener('DOMContentLoaded', initializeApp);
     }
   }
 });
-// Modify your initializeApp function to ensure products are loaded first
+
 async function initializeApp() {
   try {
-    await loadProducts(); // Wait for products to load first
+    console.log("Initializing application...");
     
+    // Load essential data first
+    await loadProducts();
+    
+    // Setup UI components
     setupFilterButtons();
     setupClearFilterButtons();
     setupSaleTypeToggle();
     setupBarcodeScanner();
     setupSalesForm();
-   await loadSalesRecords();
-   await calculateProfit();
     
-    const saleDateEl = document.getElementById('saleDate');
-    if (saleDateEl) saleDateEl.valueAsDate = new Date();
+    // Load initial data
+    await Promise.all([
+      loadSalesRecords(),
+      calculateProfit()
+    ]);
     
+    // Set focus and clear input
     const barcodeInput = document.getElementById('saleBarcode');
     if (barcodeInput) {
       barcodeInput.focus();
-      barcodeInput.value = ''; // Clear any existing value
+      barcodeInput.value = '';
     }
     
-    const saveEditBtn = document.getElementById('saveEditSaleBtn');
-    if (saveEditBtn) saveEditBtn.addEventListener('click', saveEditedSale);
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.addEventListener('click', () => auth.signOut());
+    // Set current date
+    const saleDateEl = document.getElementById('saleDate');
+    if (saleDateEl) saleDateEl.valueAsDate = new Date();
+    
+    // Setup event listeners
+    document.getElementById('saveEditSaleBtn')?.addEventListener('click', saveEditedSale);
+    document.getElementById('logoutBtn')?.addEventListener('click', () => auth.signOut());
+    
+    console.log("Initialization complete");
   } catch (error) {
     console.error('Initialization error:', error);
     alert('Error initializing application. Check console for details.');
   }
 }
-// Finally your onload handler
-window.onload = function() {
-  initializeApp();
-  // Other onload code
-};
 
 
 // --- SALE TYPE TOGGLE WITH CREDIT FIELDS ---
@@ -144,7 +149,7 @@ async function loadProducts() {
     products = []; // Reset to empty array
   }
 }
-  // --- BARCODE SCANNING ---
+ // --- BARCODE SCANNING ---
 function setupBarcodeScanner() {
   const barcodeInput = document.getElementById('saleBarcode');
   if (!barcodeInput) {
@@ -153,7 +158,7 @@ function setupBarcodeScanner() {
   }
 
   let lastInputTime = 0;
-  const SCANNER_TIMEOUT = 100; // ms to distinguish scanner vs manual
+  const SCANNER_TIMEOUT = 100;
 
   barcodeInput.addEventListener('input', async (e) => {
     const input = e.target.value.trim();
@@ -164,11 +169,9 @@ function setupBarcodeScanner() {
     if (!input) return;
 
     if (isFastInput && input.length >= 8) {
-      // Scanner input
       await processScannedBarcode(input);
       e.target.value = '';
     } else if (input.length === 6) {
-      // Manual last 6 digits input
       await handleManualInput(input);
       e.target.value = '';
     }
@@ -203,8 +206,6 @@ async function handleManualInput(last6Digits) {
   }
 }
 
-async function processScannedBarcode(fullBarcode) {
-  // --- BARCODE SCANNING ---
 async function processScannedBarcode(barcode) {
   if (!barcode) return;
   
@@ -212,12 +213,10 @@ async function processScannedBarcode(barcode) {
   if (!barcodeInput) return;
 
   try {
-    // First check local products array
     let product = products.find(p => 
       Array.isArray(p.barcodes) && p.barcodes.includes(barcode)
     );
 
-    // If not found locally, query Firestore
     if (!product) {
       const snapshot = await db.collection('stockmgt')
         .where('barcodes', 'array-contains', barcode)
@@ -227,52 +226,12 @@ async function processScannedBarcode(barcode) {
       if (!snapshot.empty) {
         const doc = snapshot.docs[0];
         product = { id: doc.id, ...doc.data() };
-        // Add to local products array for future reference
         products.push(product);
       }
     }
 
     if (product) {
-      // Check stock
-      if ((product.stockQty || 0) <= 0) {
-        alert(`Product "${product.itemName}" is out of stock!`);
-        playSound('error');
-        return;
-      }
-
-      // Check if already scanned in current sale
-      if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
-        alert(`Product "${product.itemName}" already scanned!`);
-        playSound('error');
-        return;
-      }
-
-      // Add to current sale
-      const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
-      
-      if (existingIndex >= 0) {
-        // Update existing item
-        currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
-        currentSaleItems[existingIndex].total = 
-          currentSaleItems[existingIndex].sellingPrice * 
-          currentSaleItems[existingIndex].scannedBarcodes.length;
-      } else {
-        // Add new item
-        currentSaleItems.push({
-          id: product.id,
-          itemName: product.itemName,
-          sellingPrice: product.sellingPrice,
-          costPrice: product.costPrice,
-          category: product.category,
-          stockQty: product.stockQty,
-          scannedBarcodes: [barcode],
-          total: product.sellingPrice
-        });
-      }
-
-      updateSaleSummary();
-      playSound('success');
-      barcodeInput.value = '';
+      await addProductToSale(product, barcode);
     } else {
       alert(`Product with barcode "${barcode}" not found!`);
       playSound('error');
@@ -284,7 +243,47 @@ async function processScannedBarcode(barcode) {
   }
 }
 
+async function addProductToSale(product, barcode) {
+  if (!product || !barcode) return;
 
+  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
+    alert(`Product "${product.itemName}" already scanned!`);
+    playSound('error');
+    return;
+  }
+
+  if ((product.stockQty || 0) <= 0) {
+    alert(`Product "${product.itemName}" is out of stock!`);
+    playSound('error');
+    return;
+  }
+
+  const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
+
+  if (existingIndex >= 0) {
+    currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
+    currentSaleItems[existingIndex].total = 
+      currentSaleItems[existingIndex].sellingPrice * 
+      currentSaleItems[existingIndex].scannedBarcodes.length;
+  } else {
+    currentSaleItems.push({
+      id: product.id,
+      itemName: product.itemName,
+      sellingPrice: product.sellingPrice,
+      costPrice: product.costPrice,
+      category: product.category,
+      stockQty: product.stockQty,
+      scannedBarcodes: [barcode],
+      total: product.sellingPrice
+    });
+  }
+
+  updateSaleSummary();
+  playSound('success');
+
+  const barcodeInput = document.getElementById('saleBarcode');
+  if (barcodeInput) barcodeInput.focus();
+}
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
@@ -428,31 +427,29 @@ function setupSalesForm() {
       initialPayment = 0;
     }
 
-    try {
+     try {
       const batch = db.batch();
       const transactionId = db.collection('sales').doc().id;
       const stockRef = db.collection('stockmgt');
 
-      // Verify stock & barcodes
       for (const item of currentSaleItems) {
         const productDoc = await stockRef.doc(item.id).get();
         const currentBarcodes = productDoc.data().barcodes || [];
-
+        
         const missingBarcodes = item.scannedBarcodes.filter(b => !currentBarcodes.includes(b));
         if (missingBarcodes.length > 0) {
-          throw new Error(`Barcodes not found in product ${item.itemName}: ${missingBarcodes.join(", ")}`);
+          throw new Error(`Barcodes not found in product ${item.itemName}: ${missingBarcodes.join(', ')}`);
         }
-
+        
         if ((productDoc.data().stockQty || 0) < item.scannedBarcodes.length) {
-          throw new Error(`Insufficient stock: "${item.itemName}" has only ${productDoc.data().stockQty} left`);
+          throw new Error(`Cannot complete sale: "${item.itemName}" only has ${productDoc.data().stockQty} in stock!`);
         }
       }
 
-      // Prepare sale data
       for (const item of currentSaleItems) {
         const itemRef = stockRef.doc(item.id);
         const totalItemCost = (item.costPrice * item.scannedBarcodes.length) + (item.shippingCost || 0);
-
+        
         if (saleType === 'credit') {
           const creditSalesRef = db.collection('creditSales');
           const creditAmount = item.total;
@@ -461,7 +458,7 @@ function setupSalesForm() {
           }
           const balance = creditAmount - initialPayment;
           const newCreditSaleRef = creditSalesRef.doc();
-
+          
           batch.set(newCreditSaleRef, {
             transactionId,
             date,
@@ -475,39 +472,15 @@ function setupSalesForm() {
             shippingCost: item.shippingCost || 0,
             totalCost: totalItemCost,
             totalSale: item.total,
-            creditAmount,
+            creditAmount: creditAmount,
             amountPaid: initialPayment,
-            balance,
+            balance: balance,
             dueDate,
             status: balance <= 0 ? 'Paid' : (initialPayment > 0 ? 'Partial' : 'Pending'),
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
-
-          if (balance <= 0) { // fully paid credit sale, also add to sales collection
-            const salesRef = db.collection('sales');
-            const newSaleRef = salesRef.doc();
-            batch.set(newSaleRef, {
-              transactionId,
-              date,
-              clientName,
-              clientPhone,
-              scannedBarcode: item.scannedBarcodes[0],
-              itemName: item.itemName,
-              quantity: item.scannedBarcodes.length,
-              costPrice: item.costPrice,
-              sellingPrice: item.sellingPrice,
-              shippingCost: item.shippingCost || 0,
-              totalCost: totalItemCost,
-              totalSale: item.total,
-              saleType: 'credit-paid',
-              category: item.category || '',
-              timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-          }
-
-        } else {
-          // Cash sale
+          
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
           batch.set(newSaleRef, {
@@ -523,7 +496,27 @@ function setupSalesForm() {
             shippingCost: item.shippingCost || 0,
             totalCost: totalItemCost,
             totalSale: item.total,
-            saleType: 'cash',
+            saleType: balance <= 0 ? 'credit-paid' : 'credit',
+            category: item.category || '',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        } else {
+          const salesRef = db.collection('sales');
+          const newSaleRef = salesRef.doc();
+          batch.set(newSaleRef, {
+            transactionId,
+            date,
+            clientName,
+            clientPhone,
+            scannedBarcode: item.scannedBarcodes[0],
+            itemName: item.itemName,
+            quantity: item.scannedBarcodes.length,
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+            shippingCost: item.shippingCost || 0,
+            totalCost: totalItemCost,
+            totalSale: item.total,
+            saleType: "cash",
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
@@ -536,22 +529,21 @@ function setupSalesForm() {
       }
 
       await batch.commit();
-
       alert(saleType === 'credit' ? 'Credit sale recorded.' : 'Cash sale completed!');
       playSound('success');
-
+      
       currentSaleItems = [];
       updateSaleSummary();
       document.getElementById('salesForm').reset();
       document.getElementById('saleDate').valueAsDate = new Date();
       document.getElementById('saleBarcode').focus();
-
+      
       await loadProducts();
       await loadSalesRecords();
       await calculateProfit();
     } catch (error) {
       alert('Error processing sale: ' + error.message);
-      console.error('Sale processing error:', error);
+      console.error(error);
     }
   });
 }
@@ -658,7 +650,8 @@ async function updateCreditSaleRecord(transactionId, updatedData) {
   }
 }
 
-// --- LOAD SALES RECORDS ---async function loadSalesRecords() {
+// --- LOAD SALES RECORDS ---
+async function loadSalesRecords() {
   const tbody = document.getElementById('salesRecordsTableBody');
   const fromDate = document.getElementById('filterSalesFromDate')?.value;
   const toDate = document.getElementById('filterSalesToDate')?.value;
@@ -668,18 +661,20 @@ async function updateCreditSaleRecord(transactionId, updatedData) {
 
   try {
     let query = db.collection('sales').orderBy('timestamp', 'desc');
-
-    // Apply date filters
-    if (fromDate) {
-      const startDate = new Date(fromDate);
-      startDate.setHours(0, 0, 0, 0);
-      query = query.where('timestamp', '>=', startDate);
-    }
     
-    if (toDate) {
+    if (fromDate && toDate) {
+      const startDate = new Date(fromDate);
       const endDate = new Date(toDate);
-      endDate.setHours(23, 59, 59, 999);
-      query = query.where('timestamp', '<=', endDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('date', '>=', startDate)
+                   .where('date', '<=', endDate);
+    } else if (fromDate) {
+      const startDate = new Date(fromDate);
+      query = query.where('date', '>=', startDate);
+    } else if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query = query.where('date', '<=', endDate);
     }
 
     const snapshot = await query.get();
@@ -690,7 +685,6 @@ async function updateCreditSaleRecord(transactionId, updatedData) {
       return;
     }
 
-    // Filter by client name if provided
     const filteredDocs = nameFilter 
       ? snapshot.docs.filter(doc => {
           const data = doc.data();
@@ -727,7 +721,6 @@ async function updateCreditSaleRecord(transactionId, updatedData) {
       tbody.appendChild(tr);
     });
 
-    // Add event listeners to edit buttons
     document.querySelectorAll('.edit-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         editSale(e.target.dataset.id);
