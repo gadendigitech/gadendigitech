@@ -148,90 +148,121 @@ function setupBarcodeScanner() {
     return;
   }
 
-  let barcodeBuffer = '';
-  let lastKeyTime = 0;
-  const BARCODE_DELAY = 50; // ms between keypresses
-  const MIN_DIGITS = 6; // Minimum digits to trigger auto-search
+  let isScannerInput = false;
+  let lastInputTime = 0;
+  const SCANNER_TIMEOUT = 100; // ms between keypresses to detect scanner
 
-  // Handle physical barcode scanner input (fast typing + Enter)
-  barcodeInput.addEventListener('keydown', async (e) => {
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
-    
-    clearTimeout(barcodeTimeout);
-    
-    const now = Date.now();
-    
-    // Reset buffer if too much time between keypresses
-    if (now - lastKeyTime > BARCODE_DELAY * 3) {
-      barcodeBuffer = '';
-    }
-    lastKeyTime = now;
-    
-    // Handle Enter key
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (barcodeBuffer.length > 0) {
-        await processScannedBarcode(barcodeBuffer);
-        barcodeBuffer = '';
-        barcodeInput.value = '';
-      }
-      return;
-    }
-    
-    // Only append printable characters
-    if (e.key.length === 1) {
-      barcodeBuffer += e.key;
-      barcodeTimeout = setTimeout(() => {
-        barcodeBuffer = '';
-      }, BARCODE_DELAY);
-    }
-  });
-
-  // Handle manual input (including 6-digit partial matches)
+  // Handle all input through a single event listener
   barcodeInput.addEventListener('input', async (e) => {
     const input = e.target.value.trim();
-    
-    // Only process when we have at least 6 digits
-    if (input.length >= MIN_DIGITS) {
-      const last6Digits = input.slice(-MIN_DIGITS);
-      
-      // Try to find matching barcode in local products first
-      const matchedProduct = findProductByPartialBarcode(last6Digits);
-      
-      if (matchedProduct) {
-        const fullBarcode = matchedProduct.barcodes.find(bc => bc.endsWith(last6Digits));
-        await addProductToSale(matchedProduct, fullBarcode);
-        barcodeInput.value = '';
-        barcodeBuffer = '';
-      } else {
-        // If no local match, try Firestore
-        try {
-          await processScannedBarcode(input);
-          barcodeInput.value = '';
-          barcodeBuffer = '';
-        } catch (error) {
-          console.error('Barcode processing failed:', error);
-        }
-      }
+    const now = Date.now();
+    const isFastInput = (now - lastInputTime) < SCANNER_TIMEOUT;
+    lastInputTime = now;
+
+    // Detect scanner input (fast input)
+    if (input.length > 0 && isFastInput) {
+      isScannerInput = true;
+      return; // Wait for full barcode
+    }
+
+    // Process manual input (slow typing)
+    if (!isScannerInput && input.length >= 6) {
+      await handleManualInput(input.slice(-6)); // Use last 6 digits
+      e.target.value = '';
+      return;
+    }
+
+    // Process scanner input (Enter key or timeout)
+    if (isScannerInput && input.length > 0) {
+      await processScannedBarcode(input);
+      e.target.value = '';
+      isScannerInput = false;
     }
   });
 
+  // Fallback for scanners that send Enter key
+  barcodeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      isScannerInput = true; // Force treat as scanner input
+    }
+  });
+
+  // Maintain focus
   barcodeInput.focus();
 }
 
-// Helper function to find product by partial barcode match
-function findProductByPartialBarcode(partialBarcode) {
-  if (!partialBarcode || partialBarcode.length < 6) return null;
-  
-  const matches = products.filter(product => 
-    product.barcodes && 
-    product.barcodes.some(bc => bc.endsWith(partialBarcode))
+// Handle manual 6-digit input
+async function handleManualInput(last6Digits) {
+  // 1. Check local products first
+  const localMatch = products.find(p => 
+    p.barcodes?.some(bc => bc.endsWith(last6Digits))
   );
   
-  return matches.length === 1 ? matches[0] : null;
+  if (localMatch) {
+    const fullBarcode = localMatch.barcodes.find(bc => bc.endsWith(last6Digits));
+    await addProductToSale(localMatch, fullBarcode);
+    return;
+  }
+
+  // 2. If no local match, search Firestore
+  try {
+    const snapshot = await db.collection('stockmgt')
+      .where('barcodes', 'array-contains-any', [last6Digits])
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      const product = { id: doc.id, ...doc.data() };
+      const fullBarcode = product.barcodes.find(bc => bc.endsWith(last6Digits));
+      await addProductToSale(product, fullBarcode);
+    } else {
+      alert('No product matches the last 6 digits entered');
+      playSound('error');
+    }
+  } catch (error) {
+    console.error('Error searching products:', error);
+    alert('Error searching products. Please try again.');
+  }
 }
 
-// Modified product adding function
+// Process full barcode (from scanner)
+async function processScannedBarcode(fullBarcode) {
+  try {
+    // 1. Check local products first
+    let product = products.find(p => 
+      p.barcodes?.includes(fullBarcode)
+    );
+    
+    // 2. If not found, query Firestore
+    if (!product) {
+      const snapshot = await db.collection('stockmgt')
+        .where('barcodes', 'array-contains', fullBarcode)
+        .limit(1)
+        .get();
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        product = { id: doc.id, ...doc.data() };
+        // Add to local cache
+        products.push(product);
+      }
+    }
+
+    if (product) {
+      await addProductToSale(product, fullBarcode);
+    } else {
+      alert(`Product with barcode ${fullBarcode} not found!`);
+      playSound('error');
+    }
+  } catch (error) {
+    console.error('Barcode processing error:', error);
+    alert('Error processing barcode. Please try again.');
+  }
+}
+
+// Unified product addition
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
 
@@ -253,11 +284,9 @@ async function addProductToSale(product, barcode) {
   const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
   
   if (existingIndex >= 0) {
-    // Update existing item
     currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
     currentSaleItems[existingIndex].total += product.sellingPrice;
   } else {
-    // Add new item
     currentSaleItems.push({
       id: product.id,
       itemName: product.itemName,
@@ -268,85 +297,13 @@ async function addProductToSale(product, barcode) {
       total: product.sellingPrice
     });
   }
-  
+
   updateSaleSummary();
   playSound('success');
   
-  // Return focus to barcode input
+  // Return focus
   const barcodeInput = document.getElementById('saleBarcode');
   if (barcodeInput) barcodeInput.focus();
-}
-async function processScannedBarcode(barcode) {
-  if (!barcode || barcode.length < 3) {
-    console.log('Invalid barcode - too short');
-    return;
-  }
-
-  // Check if already scanned
-  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
-    alert('This barcode has already been scanned in this sale!');
-    playSound('error');
-    return;
-  }
-
-  try {
-    // First check in local products array
-    let product = products.find(p => 
-      p.barcodes && p.barcodes.includes(barcode)
-    );
-    
-    // If not found locally, query Firestore
-    if (!product) {
-      const snapshot = await db.collection('stockmgt')
-        .where('barcodes', 'array-contains', barcode)
-        .limit(1)
-        .get();
-
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        product = { id: doc.id, ...doc.data() };
-      }
-    }
-
-    if (product) {
-      // Check stock
-      if ((product.stockQty || 0) <= 0) {
-        alert(`Product "${product.itemName}" is out of stock!`);
-        playSound('error');
-        return;
-      }
-
-      // Add to sale
-      const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
-      
-      if (existingIndex >= 0) {
-        currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
-        currentSaleItems[existingIndex].total += product.sellingPrice;
-      } else {
-        currentSaleItems.push({
-          id: product.id,
-          itemName: product.itemName,
-          sellingPrice: product.sellingPrice,
-          costPrice: product.costPrice,
-          category: product.category,
-          scannedBarcodes: [barcode],
-          total: product.sellingPrice
-        });
-      }
-
-      updateSaleSummary();
-      playSound('success');
-    } else {
-      alert(`Product with barcode ${barcode} not found in stock!`);
-      playSound('error');
-    }
-  } catch (error) {
-    console.error("Barcode processing error:", error);
-    alert('Error processing barcode. Check console for details.');
-  } finally {
-    document.getElementById('saleBarcode').value = '';
-    document.getElementById('saleBarcode').focus();
-  }
 }
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
