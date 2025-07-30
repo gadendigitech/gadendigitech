@@ -64,6 +64,12 @@ async function initializeApp() {
     alert('Error initializing application. Check console for details.');
   }
 }
+// Finally your onload handler
+window.onload = function() {
+  initializeApp();
+  // Other onload code
+};
+
 
 // --- SALE TYPE TOGGLE WITH CREDIT FIELDS ---
 function setupSaleTypeToggle() {
