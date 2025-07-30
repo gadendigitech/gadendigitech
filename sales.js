@@ -721,49 +721,40 @@ async function loadSalesRecords() {
   tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
 
   try {
-    let query = db.collection('sales').orderBy('timestamp', 'desc');
-    
-    if (fromDate && toDate) {
+    let query = db.collection('sales').orderBy('date', 'desc'); // Changed from timestamp to date
+
+    // Convert date strings to Date objects at midnight (00:00:00)
+    if (fromDate) {
       const startDate = new Date(fromDate);
-      const endDate = new Date(toDate);
-      endDate.setDate(endDate.getDate() + 1);
-      query = query.where('date', '>=', startDate)
-                   .where('date', '<=', endDate);
-    } else if (fromDate) {
-      const startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
       query = query.where('date', '>=', startDate);
-    } else if (toDate) {
+    }
+    
+    if (toDate) {
       const endDate = new Date(toDate);
-      endDate.setDate(endDate.getDate() + 1);
+      endDate.setHours(23, 59, 59, 999); // Include entire end day
       query = query.where('date', '<=', endDate);
     }
 
     const snapshot = await query.get();
-    tbody.innerHTML = '';
-
+    
     if (snapshot.empty) {
       tbody.innerHTML = '<tr><td colspan="10" class="text-center">No records found</td></tr>';
       return;
     }
 
-    const filteredDocs = nameFilter 
-      ? snapshot.docs.filter(doc => {
-          const data = doc.data();
-          return data.clientName?.toLowerCase().includes(nameFilter);
-        })
-      : snapshot.docs;
-
-    if (filteredDocs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="text-center">No matching records found</td></tr>';
-      return;
-    }
-
-    filteredDocs.forEach(doc => {
+    tbody.innerHTML = '';
+    
+    // Filter by client name if provided
+    snapshot.docs.forEach(doc => {
       const sale = doc.data();
-      const tr = document.createElement('tr');
+      if (nameFilter && !sale.clientName?.toLowerCase().includes(nameFilter)) {
+        return; // Skip if doesn't match name filter
+      }
       
+      const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${sale.date || ''}</td>
+        <td>${formatDate(sale.date)}</td>
         <td>${sale.clientName || ''}</td>
         <td>${sale.clientPhone || ''}</td>
         <td>${sale.itemName || ''}</td>
@@ -778,22 +769,21 @@ async function loadSalesRecords() {
           </button>
         </td>
       `;
-      
       tbody.appendChild(tr);
     });
 
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        editSale(e.target.dataset.id);
-      });
-    });
+    // Add the formatDate helper function
+    function formatDate(date) {
+      if (!date) return '';
+      const d = date.toDate ? date.toDate() : new Date(date);
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+    }
 
   } catch (error) {
     console.error("Error loading sales:", error);
     tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error loading records</td></tr>';
   }
 }
-
 // --- GROUP RECEIPT (SALES ONLY) ---
 function gatherSalesForGroupReceipt(clientName, date) {
   return db.collection('sales')
