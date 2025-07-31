@@ -356,12 +356,12 @@ function updateSaleSummary() {
   container.innerHTML = '';
   let subtotal = 0;
 
-currentSaleItems.forEach(item => {
-    // Use the explicit quantity instead of scannedBarcodes.length
-    const quantity = item.quantity; // THIS IS CRITICAL
+
+  currentSaleItems.forEach((item, index) => {  // Make sure index is included here
+    const quantity = item.quantity || 1;
     const itemTotal = item.sellingPrice * quantity;
     subtotal += itemTotal;
-
+      
     const div = document.createElement('div');
     div.className = 'sale-item';
     div.innerHTML = `
