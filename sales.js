@@ -1,3 +1,11 @@
+// --- GLOBAL CONSTANTS ---
+if (typeof window.BARCODE_DELAY === 'undefined') {
+    window.BARCODE_DELAY = 100; // ms between keystrokes
+}
+if (typeof window.MANUAL_DIGITS === 'undefined') {
+    window.MANUAL_DIGITS = 6;   // Manual entry digits
+}
+
 // --- FIREBASE INITIALIZATION ---
 if (!firebase.apps.length) {
   firebase.initializeApp({
@@ -167,13 +175,6 @@ function setupBarcodeScanner() {
   barcodeInput.addEventListener('keydown', handleBarcodeKeydown);
   barcodeInput.focus();
 } 
-// Replace your current declarations with:
-if (typeof BARCODE_DELAY === 'undefined') {
-    var BARCODE_DELAY = 100; // Use var instead of let/const
-}
-if (typeof MANUAL_DIGITS === 'undefined') {
-    var MANUAL_DIGITS = 6;
-}
   let barcodeInputTimeout;
 
 function handleBarcodeInput(e) {
