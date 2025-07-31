@@ -460,12 +460,21 @@ async function synchronizeStockAfterSale(currentSaleItems) {
 
 // --- SALES FORM SUBMIT: Unified Cash & Credit + Stock Sync ---
 function setupSalesForm() {
-  document.getElementById('salesForm').addEventListener('submit', async e => {
+  const salesForm = document.getElementById('salesForm');
+  if (!salesForm) {
+    console.error('Sales form element not found!');
+    return;
+  }
+
+  salesForm.addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    if (currentSaleItems.length === 0) {
-      alert('Please scan at least one item!');
-      return;
+    try {
+      // Validate inputs
+      if (currentSaleItems.length === 0) {
+        alert('Please scan at least one item!');
+        return;
+      
     }
 
     const date = document.getElementById('saleDate').value;
@@ -493,7 +502,6 @@ function setupSalesForm() {
       initialPayment = 0;
     }
 
-     try {
       const batch = db.batch();
       const transactionId = db.collection('sales').doc().id;
       const stockRef = db.collection('stockmgt');
@@ -567,7 +575,7 @@ function setupSalesForm() {
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
-     }
+          }
         } else {
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
