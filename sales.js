@@ -567,6 +567,7 @@ function setupSalesForm() {
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
+     }
         } else {
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
@@ -608,7 +609,7 @@ function setupSalesForm() {
       await loadProducts();
       await loadSalesRecords();
       await calculateProfit();
-    } catch (error) {
+    }catch (error) {
       alert('Error processing sale: ' + error.message);
       console.error(error);
     }
