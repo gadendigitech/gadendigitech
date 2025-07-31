@@ -343,6 +343,7 @@ async function addProductToSale(product, barcode) {
       scannedBarcodes: [barcode],
       total: product.sellingPrice
     });
+  
   }
  updateSaleSummary();
   playSound('success');
