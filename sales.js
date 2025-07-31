@@ -167,9 +167,10 @@ function setupBarcodeScanner() {
   barcodeInput.addEventListener('keydown', handleBarcodeKeydown);
   barcodeInput.focus();
 } 
-let barcodeInputTimeout;
-let BARCODE_DELAY = BARCODE_DELAY || 100; // Fallback to 100 if already declared
-let MANUAL_DIGITS = MANUAL_DIGITS || 6;
+// Private scope variables
+  const BARCODE_DELAY = 100;
+  const MANUAL_DIGITS = 6;
+  let barcodeInputTimeout;
 
 function handleBarcodeInput(e) {
   clearTimeout(barcodeInputTimeout);
