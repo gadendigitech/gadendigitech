@@ -309,19 +309,19 @@ async function processScannedBarcode(fullBarcode) {
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
 
-  // Improved duplicate scan check - only prevent if same product AND same barcode
-  const existingItemIndex = currentSaleItems.findIndex(item => 
-    item.id === product.id && item.scannedBarcodes.includes(barcode)
-  );
-
-  if (existingItemIndex >= 0) {
-    alert(`This specific barcode for "${product.itemName}" was already scanned!`);
-    playSound('error');
-    return;
-  }
-
-  // Stock check - verify the barcode still exists in inventory
   try {
+    // Improved duplicate scan check
+    const existingItemIndex = currentSaleItems.findIndex(item => 
+      item.id === product.id && item.scannedBarcodes.includes(barcode)
+    );
+
+    if (existingItemIndex >= 0) {
+      alert(`This specific barcode for "${product.itemName}" was already scanned!`);
+      playSound('error');
+      return;
+    }
+
+    // Verify the barcode exists in current inventory
     const productDoc = await db.collection('stockmgt').doc(product.id).get();
     const currentBarcodes = productDoc.data().barcodes || [];
     
@@ -330,6 +330,7 @@ async function addProductToSale(product, barcode) {
       playSound('error');
       return;
     }
+
 
     if ((productDoc.data().stockQty || 0) <= 0) {
       alert(`Product "${product.itemName}" is out of stock!`);
@@ -362,6 +363,11 @@ async function addProductToSale(product, barcode) {
   updateSaleSummary();
   playSound('success');
   document.getElementById('saleBarcode').focus();
+ } catch (error) {
+    console.error("Error adding product to sale:", error);
+    alert('Error processing product. Please try again.');
+    playSound('error');
+  }
 }
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
