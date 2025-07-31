@@ -305,69 +305,85 @@ async function processScannedBarcode(fullBarcode) {
     alert('Error processing barcode. Please try again.');
   }
 }
-
 async function addProductToSale(product, barcode) {
-  if (!product || !barcode) return;
+  // 1. Basic validation
+  if (!product || !barcode) {
+    console.error('Invalid product or barcode');
+    return;
+  }
 
   try {
-    // Improved duplicate scan check
-    const existingItemIndex = currentSaleItems.findIndex(item => 
-      item.id === product.id && item.scannedBarcodes.includes(barcode)
+    // 2. Check for duplicate scans (same product + same barcode)
+    const isDuplicate = currentSaleItems.some(
+      item => item.id === product.id && item.scannedBarcodes.includes(barcode)
     );
-
-    if (existingItemIndex >= 0) {
-      alert(`This specific barcode for "${product.itemName}" was already scanned!`);
-      playSound('error');
-      return;
-    }
-
-    // Verify the barcode exists in current inventory
-    const productDoc = await db.collection('stockmgt').doc(product.id).get();
-    const currentBarcodes = productDoc.data().barcodes || [];
     
-    if (!currentBarcodes.includes(barcode)) {
-      alert(`Barcode ${barcode} not found in current inventory for ${product.itemName}!`);
-      playSound('error');
+    if (isDuplicate) {
+      showAlert(`Barcode ${barcode} for "${product.itemName}" was already scanned!`, 'error');
       return;
     }
 
-
-    if ((productDoc.data().stockQty || 0) <= 0) {
-      alert(`Product "${product.itemName}" is out of stock!`);
-      playSound('error');
+    // 3. Verify inventory in database
+    const productSnapshot = await db.collection('stockmgt').doc(product.id).get();
+    
+    if (!productSnapshot.exists) {
+      showAlert(`Product "${product.itemName}" not found in inventory!`, 'error');
       return;
     }
-  // Add to current sale
-  const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
 
-  if (existingIndex >= 0) {
-    // Update existing item
-    currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
-    currentSaleItems[existingIndex].total = 
-      currentSaleItems[existingIndex].sellingPrice * 
-      currentSaleItems[existingIndex].scannedBarcodes.length;
-  } else {
-    // Add new item
-    currentSaleItems.push({
-      id: product.id,
-      itemName: product.itemName,
-      sellingPrice: product.sellingPrice,
-      costPrice: product.costPrice,
-      category: product.category,
-      stockQty: product.stockQty,
-      scannedBarcodes: [barcode],
-      total: product.sellingPrice
-    });
-  }
+    const productData = productSnapshot.data();
+    const hasBarcode = productData.barcodes?.includes(barcode) ?? false;
+    const isInStock = (productData.stockQty ?? 0) > 0;
 
-  updateSaleSummary();
-  playSound('success');
-  document.getElementById('saleBarcode').focus();
- } catch (error) {
-    console.error("Error adding product to sale:", error);
-    alert('Error processing product. Please try again.');
-    playSound('error');
+    if (!hasBarcode) {
+      showAlert(`Barcode ${barcode} not found for "${product.itemName}"!`, 'error');
+      return;
+    }
+
+    if (!isInStock) {
+      showAlert(`"${product.itemName}" is out of stock!`, 'error');
+      return;
+    }
+
+    // 4. Add to sale
+    const existingItemIndex = currentSaleItems.findIndex(item => item.id === product.id);
+    
+    if (existingItemIndex >= 0) {
+      // Update existing item
+      currentSaleItems[existingItemIndex].scannedBarcodes.push(barcode);
+      currentSaleItems[existingItemIndex].total = 
+        currentSaleItems[existingItemIndex].sellingPrice * 
+        currentSaleItems[existingItemIndex].scannedBarcodes.length;
+    } else {
+      // Add new item
+      currentSaleItems.push({
+        id: product.id,
+        itemName: product.itemName,
+        sellingPrice: product.sellingPrice,
+        costPrice: product.costPrice,
+        category: product.category,
+        stockQty: productData.stockQty,
+        scannedBarcodes: [barcode],
+        total: product.sellingPrice
+      });
+    }
+
+    // 5. Update UI
+    updateSaleSummary();
+    playSound('success');
+    document.getElementById('saleBarcode').focus();
+
+  } catch (error) {
+    // This catch block is REQUIRED and now properly implemented
+    console.error('Failed to add product:', error);
+    showAlert('Error processing product. Please try again.', 'error');
   }
+}
+
+// Helper function for consistent alerts
+function showAlert(message, type) {
+  alert(message);
+  playSound(type || 'error');
 }
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
