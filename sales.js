@@ -306,56 +306,38 @@ async function processScannedBarcode(fullBarcode) {
   }
 }
 async function addProductToSale(product, barcode) {
-  // 1. Basic validation
-  if (!product || !barcode) {
-    console.error('Invalid product or barcode');
-    return;
-  }
+  if (!product || !barcode) return;
 
   try {
-    // 2. Check for duplicate scans (same product + same barcode)
-    const isDuplicate = currentSaleItems.some(
-      item => item.id === product.id && item.scannedBarcodes.includes(barcode)
+    // Check if this exact barcode was already scanned
+    const isDuplicate = currentSaleItems.some(item => 
+      item.scannedBarcodes.includes(barcode)
     );
     
     if (isDuplicate) {
-      showAlert(`Barcode ${barcode} for "${product.itemName}" was already scanned!`, 'error');
+      alert(`Barcode ${barcode} was already scanned!`);
+      playSound('error');
       return;
     }
 
-    // 3. Verify inventory in database
-    const productSnapshot = await db.collection('stockmgt').doc(product.id).get();
+    // Verify inventory
+    const productDoc = await db.collection('stockmgt').doc(product.id).get();
+    const productData = productDoc.data();
     
-    if (!productSnapshot.exists) {
-      showAlert(`Product "${product.itemName}" not found in inventory!`, 'error');
+    if (!productData.barcodes?.includes(barcode)) {
+      alert(`Barcode ${barcode} not found in inventory!`);
+      playSound('error');
       return;
     }
 
-    const productData = productSnapshot.data();
-    const hasBarcode = productData.barcodes?.includes(barcode) ?? false;
-    const isInStock = (productData.stockQty ?? 0) > 0;
+    // Check if product already exists in sale
+    const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
 
-    if (!hasBarcode) {
-      showAlert(`Barcode ${barcode} not found for "${product.itemName}"!`, 'error');
-      return;
-    }
-
-    if (!isInStock) {
-      showAlert(`"${product.itemName}" is out of stock!`, 'error');
-      return;
-    }
-
-    // 4. Add to sale
-    const existingItemIndex = currentSaleItems.findIndex(item => item.id === product.id);
-    
-    if (existingItemIndex >= 0) {
-      // Update existing item
-      currentSaleItems[existingItemIndex].scannedBarcodes.push(barcode);
-      currentSaleItems[existingItemIndex].total = 
-        currentSaleItems[existingItemIndex].sellingPrice * 
-        currentSaleItems[existingItemIndex].scannedBarcodes.length;
+    if (existingIndex >= 0) {
+      // Product exists - just add the barcode (but don't increase quantity)
+      currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
     } else {
-      // Add new item
+      // New product - add with quantity 1
       currentSaleItems.push({
         id: product.id,
         itemName: product.itemName,
@@ -364,22 +346,21 @@ async function addProductToSale(product, barcode) {
         category: product.category,
         stockQty: productData.stockQty,
         scannedBarcodes: [barcode],
+        quantity: 1, // Explicitly set to 1
         total: product.sellingPrice
       });
     }
 
-    // 5. Update UI
     updateSaleSummary();
     playSound('success');
     document.getElementById('saleBarcode').focus();
 
   } catch (error) {
-    // This catch block is REQUIRED and now properly implemented
-    console.error('Failed to add product:', error);
-    showAlert('Error processing product. Please try again.', 'error');
+    console.error("Error adding product:", error);
+    alert("Error processing product. Please try again.");
+    playSound('error');
   }
 }
-
 // Helper function for consistent alerts
 function showAlert(message, type) {
   alert(message);
