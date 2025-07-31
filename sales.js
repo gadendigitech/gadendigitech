@@ -736,7 +736,7 @@ async function loadSalesRecords() {
   tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
 
   try {
-    let query = db.collection('sales').orderBy('date', 'desc'); // Changed from timestamp to date
+    let query = db.collection('sales').orderBy('timestamp', 'desc'); // Changed from timestamp to date
 
     // Convert date strings to Date objects at midnight (00:00:00)
     if (fromDate) {
