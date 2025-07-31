@@ -546,7 +546,8 @@ function setupSalesForm() {
             category: item.category || '',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
-          
+
+     if (balance <= 0) {
           const salesRef = db.collection('sales');
           const newSaleRef = salesRef.doc();
           batch.set(newSaleRef, {
