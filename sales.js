@@ -166,14 +166,11 @@ function setupBarcodeScanner() {
   barcodeInput.addEventListener('input', handleBarcodeInput);
   barcodeInput.addEventListener('keydown', handleBarcodeKeydown);
   barcodeInput.focus();
-}
-// Only declare if not already declared
-if (typeof BARCODE_DELAY === 'undefined') {
-  const BARCODE_DELAY = 100;
-}
-if (typeof MANUAL_DIGITS === 'undefined') {
-  const MANUAL_DIGITS = 6;
-}
+} 
+let barcodeInputTimeout;
+  const BARCODE_DELAY = 100; // ms between keystrokes
+  const MANUAL_DIGITS = 6;   // Manual entry digits
+
 function handleBarcodeInput(e) {
   clearTimeout(barcodeInputTimeout);
   const input = e.target.value.trim();
