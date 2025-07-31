@@ -308,63 +308,45 @@ async function processScannedBarcode(fullBarcode) {
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
 
-  try {
-    // Check if this exact barcode was already scanned
-    const isDuplicate = currentSaleItems.some(item => 
-      item.scannedBarcodes.includes(barcode)
-    );
-    
-    if (isDuplicate) {
-      alert(`Barcode ${barcode} was already scanned!`);
-      playSound('error');
-      return;
-    }
-
-    // Verify inventory
-    const productDoc = await db.collection('stockmgt').doc(product.id).get();
-    const productData = productDoc.data();
-    
-    if (!productData.barcodes?.includes(barcode)) {
-      alert(`Barcode ${barcode} not found in inventory!`);
-      playSound('error');
-      return;
-    }
-
-    // Check if product already exists in sale
-    const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
-
-    if (existingIndex >= 0) {
-      // Product exists - just add the barcode (but don't increase quantity)
-      currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
-    } else {
-      // New product - add with quantity 1
-      currentSaleItems.push({
-        id: product.id,
-        itemName: product.itemName,
-        sellingPrice: product.sellingPrice,
-        costPrice: product.costPrice,
-        category: product.category,
-        stockQty: productData.stockQty,
-        scannedBarcodes: [barcode],
-        quantity: 1, // Explicitly set to 1
-        total: product.sellingPrice
-      });
-    }
-
-    updateSaleSummary();
-    playSound('success');
-    document.getElementById('saleBarcode').focus();
-
-  } catch (error) {
-    console.error("Error adding product:", error);
-    alert("Error processing product. Please try again.");
+  // Prevent duplicate scans
+  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
+    alert(`Product "${product.itemName}" already scanned!`);
     playSound('error');
+    return;
   }
-}
-// Helper function for consistent alerts
-function showAlert(message, type) {
-  alert(message);
-  playSound(type || 'error');
+
+  // Stock check
+  if ((product.stockQty || 0) <= 0) {
+    alert(`Product "${product.itemName}" is out of stock!`);
+    playSound('error');
+    return;
+  }
+
+  // Add to current sale
+  const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
+
+  if (existingIndex >= 0) {
+    // Update existing item
+    currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
+    currentSaleItems[existingIndex].total = 
+      currentSaleItems[existingIndex].sellingPrice * 
+      currentSaleItems[existingIndex].scannedBarcodes.length;
+  } else {
+    // Add new item
+    currentSaleItems.push({
+      id: product.id,
+      itemName: product.itemName,
+      sellingPrice: product.sellingPrice,
+      costPrice: product.costPrice,
+      category: product.category,
+      stockQty: product.stockQty,
+      scannedBarcodes: [barcode],
+      total: product.sellingPrice
+    });
+  }
+ updateSaleSummary();
+  playSound('success');
+  document.getElementById('saleBarcode').focus();
 }
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
