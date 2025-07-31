@@ -309,20 +309,33 @@ async function processScannedBarcode(fullBarcode) {
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
 
-  // Prevent duplicate scans
-  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
-    alert(`Product "${product.itemName}" already scanned!`);
+  // Improved duplicate scan check - only prevent if same product AND same barcode
+  const existingItemIndex = currentSaleItems.findIndex(item => 
+    item.id === product.id && item.scannedBarcodes.includes(barcode)
+  );
+
+  if (existingItemIndex >= 0) {
+    alert(`This specific barcode for "${product.itemName}" was already scanned!`);
     playSound('error');
     return;
   }
 
-  // Stock check
-  if ((product.stockQty || 0) <= 0) {
-    alert(`Product "${product.itemName}" is out of stock!`);
-    playSound('error');
-    return;
-  }
+  // Stock check - verify the barcode still exists in inventory
+  try {
+    const productDoc = await db.collection('stockmgt').doc(product.id).get();
+    const currentBarcodes = productDoc.data().barcodes || [];
+    
+    if (!currentBarcodes.includes(barcode)) {
+      alert(`Barcode ${barcode} not found in current inventory for ${product.itemName}!`);
+      playSound('error');
+      return;
+    }
 
+    if ((productDoc.data().stockQty || 0) <= 0) {
+      alert(`Product "${product.itemName}" is out of stock!`);
+      playSound('error');
+      return;
+    }
   // Add to current sale
   const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
 
