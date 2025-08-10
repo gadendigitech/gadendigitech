@@ -290,18 +290,17 @@ async function processScannedBarcode(fullBarcode) {
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
 
-  // Normalize the barcode (trim whitespace and ensure consistent format)
-  const normalizedBarcode = barcode.toString().trim();
+  // Normalize the barcode input
+  const scannedBarcode = barcode.toString().trim();
 
-  // Check if this exact barcode was already scanned in any product
-  const isDuplicate = currentSaleItems.some(item => 
-    item.scannedBarcodes.some(scannedBarcode => 
-      scannedBarcode.toString().trim() === normalizedBarcode
-    )
-  );
+  // Track scanned barcodes just for this sale session
+  if (!window.currentSessionScannedBarcodes) {
+    window.currentSessionScannedBarcodes = [];
+  }
 
-  if (isDuplicate) {
-    alert(`Product "${product.itemName}" (barcode: ${normalizedBarcode}) already scanned!`);
+  // Check for duplicate scan ONLY within current sale
+  if (window.currentSessionScannedBarcodes.includes(scannedBarcode)) {
+    alert(`Barcode ${scannedBarcode} already scanned in this transaction!`);
     playSound('error');
     return;
   }
@@ -313,17 +312,20 @@ async function addProductToSale(product, barcode) {
     return;
   }
 
+  // Add to tracked barcodes
+  window.currentSessionScannedBarcodes.push(scannedBarcode);
+
   const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
 
   if (existingIndex >= 0) {
-    // Update existing item
-    currentSaleItems[existingIndex].scannedBarcodes.push(normalizedBarcode);
+    // Update existing product in current sale
+    currentSaleItems[existingIndex].scannedBarcodes.push(scannedBarcode);
     currentSaleItems[existingIndex].quantity = currentSaleItems[existingIndex].scannedBarcodes.length;
     currentSaleItems[existingIndex].total = 
       currentSaleItems[existingIndex].sellingPrice * 
       currentSaleItems[existingIndex].quantity;
   } else {
-    // Add new item
+    // Add new product to current sale  
     currentSaleItems.push({
       id: product.id,
       itemName: product.itemName,
@@ -332,7 +334,7 @@ async function addProductToSale(product, barcode) {
       shippingCost: product.shippingCost || 0,
       category: product.category,
       stockQty: product.stockQty,
-      scannedBarcodes: [normalizedBarcode],
+      scannedBarcodes: [scannedBarcode],
       quantity: 1,
       total: product.sellingPrice,
       totalCost: product.costPrice + (product.shippingCost || 0)
@@ -342,6 +344,12 @@ async function addProductToSale(product, barcode) {
   updateSaleSummary();
   playSound('success');
   document.getElementById('saleBarcode').focus();
+}
+
+// Reset scanned barcodes when starting new sale
+function setupNewSale() {
+  window.currentSessionScannedBarcodes = [];
+  // Call this whenever you initialize a new sale
 }
 
 // --- SALE SUMMARY ---
