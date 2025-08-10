@@ -290,12 +290,23 @@ async function processScannedBarcode(fullBarcode) {
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
 
-  if (currentSaleItems.some(item => item.scannedBarcodes.includes(barcode))) {
-    alert(`Product "${product.itemName}" already scanned!`);
+  // Normalize the barcode (trim whitespace and ensure consistent format)
+  const normalizedBarcode = barcode.toString().trim();
+
+  // Check if this exact barcode was already scanned in any product
+  const isDuplicate = currentSaleItems.some(item => 
+    item.scannedBarcodes.some(scannedBarcode => 
+      scannedBarcode.toString().trim() === normalizedBarcode
+    )
+  );
+
+  if (isDuplicate) {
+    alert(`Product "${product.itemName}" (barcode: ${normalizedBarcode}) already scanned!`);
     playSound('error');
     return;
   }
 
+  // Stock check
   if ((product.stockQty || 0) <= 0) {
     alert(`Product "${product.itemName}" is out of stock!`);
     playSound('error');
@@ -305,21 +316,23 @@ async function addProductToSale(product, barcode) {
   const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
 
   if (existingIndex >= 0) {
-    currentSaleItems[existingIndex].scannedBarcodes.push(barcode);
+    // Update existing item
+    currentSaleItems[existingIndex].scannedBarcodes.push(normalizedBarcode);
     currentSaleItems[existingIndex].quantity = currentSaleItems[existingIndex].scannedBarcodes.length;
     currentSaleItems[existingIndex].total = 
       currentSaleItems[existingIndex].sellingPrice * 
       currentSaleItems[existingIndex].quantity;
   } else {
+    // Add new item
     currentSaleItems.push({
       id: product.id,
       itemName: product.itemName,
       sellingPrice: product.sellingPrice,
       costPrice: product.costPrice,
-      shippingCost: product.shippingCost,
+      shippingCost: product.shippingCost || 0,
       category: product.category,
       stockQty: product.stockQty,
-      scannedBarcodes: [barcode],
+      scannedBarcodes: [normalizedBarcode],
       quantity: 1,
       total: product.sellingPrice,
       totalCost: product.costPrice + (product.shippingCost || 0)
