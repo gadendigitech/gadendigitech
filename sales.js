@@ -758,6 +758,8 @@ async function loadSalesRecords(filters = {}) {
 // --- CALCULATE PROFIT ---
 async function calculateProfit(filters = {}) {
   try {
+    console.log("Calculating profit...");
+
     let query = db.collection('sales').orderBy('timestamp', 'desc');
 
     if (filters.fromDate) {
@@ -779,6 +781,8 @@ async function calculateProfit(filters = {}) {
 
     salesSnap.forEach(doc => {
       const sale = doc.data();
+      console.log("Processing sale:", sale); // Log each sale
+      
       const matchesClient = !filters.clientName || 
                           (sale.clientName && sale.clientName.toLowerCase().includes(filters.clientName.toLowerCase()));
       
