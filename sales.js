@@ -821,4 +821,5 @@ window.onload = () => {
   document.getElementById('saleBarcode')?.focus();
   loadSalesRecords();
   calculateProfit();
-};
+};          
+}
