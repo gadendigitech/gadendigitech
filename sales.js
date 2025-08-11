@@ -24,6 +24,8 @@ window.db = db;
 
 let products = [];
 let currentSaleItems = [];
+// Track ONLY barcodes scanned in current transaction
+let currentTransactionScannedBarcodes = [];
 let barcodeInputBuffer = '';
 let currentEditingSale = null;
 let barcodeTimeout;
@@ -289,69 +291,43 @@ async function processScannedBarcode(fullBarcode) {
 
 async function addProductToSale(product, barcode) {
   if (!product || !barcode) return;
-
-  // Normalize the barcode input
-  const scannedBarcode = barcode.toString().trim();
-
-  // Track scanned barcodes just for this sale session
-  if (!window.currentSessionScannedBarcodes) {
-    window.currentSessionScannedBarcodes = [];
-  }
-
-  // Check for duplicate scan ONLY within current sale
-  if (window.currentSessionScannedBarcodes.includes(scannedBarcode)) {
-    alert(`Barcode ${scannedBarcode} already scanned in this transaction!`);
+  // Normalize barcode (case insensitive, trimmed)
+  const scannedBarcode = String(barcode).trim().toUpperCase();
+  // Check ONLY if this exact barcode was scanned before in current transaction
+  if (currentTransactionScannedBarcodes.includes(scannedBarcode)) {
+    alert(`${scannedBarcode} was already scanned in this transaction!`);
     playSound('error');
     return;
   }
-
-  // Stock check
-  if ((product.stockQty || 0) <= 0) {
-    alert(`Product "${product.itemName}" is out of stock!`);
-    playSound('error');
-    return;
-  }
-
-  // Add to tracked barcodes
-  window.currentSessionScannedBarcodes.push(scannedBarcode);
-
+  // Passed duplicate check - process the scan
+  currentTransactionScannedBarcodes.push(scannedBarcode);
+  // Find existing product or add new
   const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
-
   if (existingIndex >= 0) {
-    // Update existing product in current sale
-    currentSaleItems[existingIndex].scannedBarcodes.push(scannedBarcode);
-    currentSaleItems[existingIndex].quantity = currentSaleItems[existingIndex].scannedBarcodes.length;
+    // Add to existing product's barcodes
+    currentSaleItems[existingIndex].barcodes.push(scannedBarcode);
+    currentSaleItems[existingIndex].quantity++;
     currentSaleItems[existingIndex].total = 
       currentSaleItems[existingIndex].sellingPrice * 
       currentSaleItems[existingIndex].quantity;
   } else {
-    // Add new product to current sale  
+//Create new product entry
     currentSaleItems.push({
       id: product.id,
       itemName: product.itemName,
       sellingPrice: product.sellingPrice,
-      costPrice: product.costPrice,
-      shippingCost: product.shippingCost || 0,
-      category: product.category,
-      stockQty: product.stockQty,
-      scannedBarcodes: [scannedBarcode],
       quantity: 1,
-      total: product.sellingPrice,
-      totalCost: product.costPrice + (product.shippingCost || 0)
+      barcodes: [scannedBarcode],
+      total: product.sellingPrice
     });
   }
-
-  updateSaleSummary();
-  playSound('success');
+// Reset scanned barcodes when starting new sale
+function newSale() {
+  currentTransactionScannedBarcodes = [];
+  currentSaleItems = [];
+  document.getElementById('saleBarcode').value = '';
   document.getElementById('saleBarcode').focus();
 }
-
-// Reset scanned barcodes when starting new sale
-function setupNewSale() {
-  window.currentSessionScannedBarcodes = [];
-  // Call this whenever you initialize a new sale
-}
-
 // --- SALE SUMMARY ---
 function updateSaleSummary() {
   const container = document.getElementById('saleItemsContainer');
