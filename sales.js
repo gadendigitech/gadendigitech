@@ -846,4 +846,4 @@ window.onload = () => {
   loadSalesRecords();
   calculateProfit();
 };          
-}
+
