@@ -307,9 +307,10 @@ async function addProductToSale(product, barcode) {
 
   // Stock check
   if ((product.stockQty || 0) <= 0) {
-    alert(`Product "${product.itemName}" is out of stock!`);
-    playSound('error');
-    return;
+    // Commenting out the alert to prevent the pop-up message
+    // alert(`Product "${product.itemName}" is out of stock!`);
+    console.warn(`Product "${product.itemName}" is out of stock!`); // Log to console instead
+    return; // Exit the function if the product is out of stock
   }
 
   // Add to tracked barcodes
@@ -345,6 +346,7 @@ async function addProductToSale(product, barcode) {
   playSound('success');
   document.getElementById('saleBarcode').focus();
 }
+
 
 // Reset scanned barcodes when starting new sale
 function setupNewSale() {
