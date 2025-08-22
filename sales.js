@@ -29,6 +29,9 @@ let currentEditingSale = null;
 let barcodeTimeout;
 const BARCODE_DELAY = 50;
 
+// Initialize session scanned barcodes tracking
+window.currentSessionScannedBarcodes = [];
+
 auth.onAuthStateChanged(user => {
   if (!user) {
     window.location = 'index.html';
@@ -44,6 +47,9 @@ auth.onAuthStateChanged(user => {
 async function initializeApp() {
   try {
     console.log("Initializing application...");
+    
+    // Reset scanned barcodes for new session
+    setupNewSale();
     
     // Load essential data first
     await loadProducts();
@@ -81,6 +87,13 @@ async function initializeApp() {
     console.error('Initialization error:', error);
     alert('Error initializing application. Check console for details.');
   }
+}
+
+// Reset scanned barcodes when starting new sale
+function setupNewSale() {
+  window.currentSessionScannedBarcodes = [];
+  currentSaleItems = [];
+  console.log("New sale session started - cleared barcode tracking");
 }
 
 // --- SALE TYPE TOGGLE WITH CREDIT FIELDS ---
@@ -293,12 +306,12 @@ async function addProductToSale(product, barcode) {
   // Normalize the barcode input
   const scannedBarcode = barcode.toString().trim();
 
-  // Track scanned barcodes just for this sale session
+  // Initialize session tracking if not exists
   if (!window.currentSessionScannedBarcodes) {
     window.currentSessionScannedBarcodes = [];
   }
 
-  // Check for duplicate scan ONLY within current sale
+  // Check for duplicate scan ONLY within current sale session
   if (window.currentSessionScannedBarcodes.includes(scannedBarcode)) {
     alert(`Barcode ${scannedBarcode} already scanned in this transaction!`);
     playSound('error');
@@ -307,13 +320,13 @@ async function addProductToSale(product, barcode) {
 
   // Stock check
   if ((product.stockQty || 0) <= 0) {
-    // Commenting out the alert to prevent the pop-up message
+    console.warn(`Product "${product.itemName}" is out of stock!`);
+    // Commented out alert to prevent popup as requested
     // alert(`Product "${product.itemName}" is out of stock!`);
-    console.warn(`Product "${product.itemName}" is out of stock!`); // Log to console instead
-    return; // Exit the function if the product is out of stock
+    return;
   }
 
-  // Add to tracked barcodes
+  // Add to tracked barcodes for this session
   window.currentSessionScannedBarcodes.push(scannedBarcode);
 
   const existingIndex = currentSaleItems.findIndex(item => item.id === product.id);
@@ -345,13 +358,6 @@ async function addProductToSale(product, barcode) {
   updateSaleSummary();
   playSound('success');
   document.getElementById('saleBarcode').focus();
-}
-
-
-// Reset scanned barcodes when starting new sale
-function setupNewSale() {
-  window.currentSessionScannedBarcodes = [];
-  // Call this whenever you initialize a new sale
 }
 
 // --- SALE SUMMARY ---
@@ -423,6 +429,15 @@ function updateSaleSummary() {
   container.querySelectorAll('.remove-item').forEach(btn => {
     btn.addEventListener('click', e => {
       const idx = +e.target.dataset.index;
+      // Remove the barcodes from session tracking when removing item
+      const removedItem = currentSaleItems[idx];
+      removedItem.scannedBarcodes.forEach(barcode => {
+        const barcodeIndex = window.currentSessionScannedBarcodes.indexOf(barcode);
+        if (barcodeIndex > -1) {
+          window.currentSessionScannedBarcodes.splice(barcodeIndex, 1);
+        }
+      });
+      
       currentSaleItems.splice(idx, 1);
       updateSaleSummary();
     });
@@ -577,7 +592,8 @@ function setupSalesForm() {
       alert(saleType === 'credit' ? 'Credit sale recorded.' : 'Cash sale completed!');
       playSound('success');
       
-      currentSaleItems = [];
+      // Reset for new sale
+      setupNewSale();
       updateSaleSummary();
       document.getElementById('salesForm').reset();
       document.getElementById('saleDate').valueAsDate = new Date();
@@ -596,7 +612,10 @@ function setupSalesForm() {
 // --- EDIT SALE FUNCTIONALITY ---
 window.editSale = async function(saleId) {
   try {
-    document.getElementById('editSaleForm').reset();
+    const editForm = document.getElementById('editSaleForm');
+    if (editForm) {
+      editForm.reset();
+    }
     
     const saleDoc = await db.collection('sales').doc(saleId).get();
     if (!saleDoc.exists) {
@@ -606,18 +625,47 @@ window.editSale = async function(saleId) {
     const saleData = saleDoc.data();
     currentEditingSale = { id: saleId, ...saleData };
     
-    document.getElementById('editSaleId').value = saleId;
-    document.getElementById('editSaleDate').value = saleData.date || '';
-    document.getElementById('editClientName').value = saleData.clientName || '';
-    document.getElementById('editClientPhone').value = saleData.clientPhone || '';
-    document.getElementById('editItemName').value = saleData.itemName || '';
-    document.getElementById('editQuantity').value = saleData.quantity || 1;
-    document.getElementById('editSellingPrice').value = saleData.sellingPrice?.toFixed(2) || '';
-    document.getElementById('editCostPrice').value = saleData.costPrice?.toFixed(2) || '';
-    document.getElementById('editShippingCost').value = saleData.shippingCost?.toFixed(2) || 0;
+    // Populate form fields
+    const editSaleId = document.getElementById('editSaleId');
+    const editSaleDate = document.getElementById('editSaleDate');
+    const editClientName = document.getElementById('editClientName');
+    const editClientPhone = document.getElementById('editClientPhone');
+    const editItemName = document.getElementById('editItemName');
+    const editQuantity = document.getElementById('editQuantity');
+    const editSellingPrice = document.getElementById('editSellingPrice');
+    const editCostPrice = document.getElementById('editCostPrice');
+    const editShippingCost = document.getElementById('editShippingCost');
     
-    // Show the edit modal
-    $('#editSaleModal').modal('show');
+    if (editSaleId) editSaleId.value = saleId;
+    if (editSaleDate) editSaleDate.value = saleData.date || '';
+    if (editClientName) editClientName.value = saleData.clientName || '';
+    if (editClientPhone) editClientPhone.value = saleData.clientPhone || '';
+    if (editItemName) editItemName.value = saleData.itemName || '';
+    if (editQuantity) editQuantity.value = saleData.quantity || 1;
+    if (editSellingPrice) editSellingPrice.value = saleData.sellingPrice?.toFixed(2) || '';
+    if (editCostPrice) editCostPrice.value = saleData.costPrice?.toFixed(2) || '';
+    if (editShippingCost) editShippingCost.value = saleData.shippingCost?.toFixed(2) || 0;
+    
+    // Show the edit modal - try both Bootstrap modal methods
+    const editModal = document.getElementById('editSaleModal');
+    if (editModal) {
+      // Try Bootstrap 5 method first
+      if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = new bootstrap.Modal(editModal);
+        modal.show();
+      }
+      // Fallback to Bootstrap 4/jQuery method
+      else if (typeof $ !== 'undefined' && $.fn.modal) {
+        $(editModal).modal('show');
+      }
+      // Fallback to simple display
+      else {
+        editModal.style.display = 'block';
+        editModal.classList.add('show');
+      }
+    } else {
+      console.error('Edit modal element not found');
+    }
     
   } catch (error) {
     console.error("Error preparing edit:", error);
@@ -626,26 +674,29 @@ window.editSale = async function(saleId) {
 };
 
 async function saveEditedSale() {
-  if (!currentEditingSale) return;
+  if (!currentEditingSale) {
+    console.error('No sale being edited');
+    return;
+  }
   
   try {
     const form = document.getElementById('editSaleForm');
-    if (!form.checkValidity()) {
+    if (form && !form.checkValidity()) {
       form.reportValidity();
       return;
     }
     
-    const quantity = parseInt(document.getElementById('editQuantity').value) || 1;
-    const sellingPrice = parseFloat(document.getElementById('editSellingPrice').value) || 0;
-    const shippingCost = parseFloat(document.getElementById('editShippingCost').value) || 0;
-    const costPrice = parseFloat(document.getElementById('editCostPrice').value) || 0;
+    const quantity = parseInt(document.getElementById('editQuantity')?.value) || 1;
+    const sellingPrice = parseFloat(document.getElementById('editSellingPrice')?.value) || 0;
+    const shippingCost = parseFloat(document.getElementById('editShippingCost')?.value) || 0;
+    const costPrice = parseFloat(document.getElementById('editCostPrice')?.value) || 0;
     const totalCost = (costPrice * quantity) + shippingCost;
     const totalSale = sellingPrice * quantity;
     
     const updatedData = {
-      date: document.getElementById('editSaleDate').value,
-      clientName: document.getElementById('editClientName').value.trim(),
-      clientPhone: document.getElementById('editClientPhone').value.trim(),
+      date: document.getElementById('editSaleDate')?.value || currentEditingSale.date,
+      clientName: (document.getElementById('editClientName')?.value || '').trim(),
+      clientPhone: (document.getElementById('editClientPhone')?.value || '').trim(),
       quantity: quantity,
       sellingPrice: sellingPrice,
       costPrice: costPrice,
@@ -670,7 +721,25 @@ async function saveEditedSale() {
     await loadSalesRecords();
     await calculateProfit();
     
-    $('#editSaleModal').modal('hide');
+    // Hide the modal
+    const editModal = document.getElementById('editSaleModal');
+    if (editModal) {
+      // Try Bootstrap 5 method first
+      if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = bootstrap.Modal.getInstance(editModal);
+        if (modal) modal.hide();
+      }
+      // Fallback to Bootstrap 4/jQuery method
+      else if (typeof $ !== 'undefined' && $.fn.modal) {
+        $(editModal).modal('hide');
+      }
+      // Fallback to simple hide
+      else {
+        editModal.style.display = 'none';
+        editModal.classList.remove('show');
+      }
+    }
+    
     alert('Sale updated successfully!');
     
   } catch (error) {
@@ -680,45 +749,51 @@ async function saveEditedSale() {
 }
 
 async function updateCreditSaleRecord(transactionId, updatedData) {
-  const creditQuery = await db.collection('creditSales')
-    .where('transactionId', '==', transactionId)
-    .limit(1)
-    .get();
-  
-  if (!creditQuery.empty) {
-    const creditDoc = creditQuery.docs[0];
-    const amountPaid = creditDoc.data().amountPaid || 0;
-    const balance = updatedData.totalSale - amountPaid;
+  try {
+    const creditQuery = await db.collection('creditSales')
+      .where('transactionId', '==', transactionId)
+      .limit(1)
+      .get();
     
-    await creditDoc.ref.update({
-      sellingPrice: updatedData.sellingPrice,
-      totalSale: updatedData.totalSale,
-      totalCost: updatedData.totalCost,
-      balance: balance,
-      status: balance <= 0 ? 'Paid' : (amountPaid > 0 ? 'Partial' : 'Pending'),
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    if (!creditQuery.empty) {
+      const creditDoc = creditQuery.docs[0];
+      const amountPaid = creditDoc.data().amountPaid || 0;
+      const balance = updatedData.totalSale - amountPaid;
+      
+      await creditDoc.ref.update({
+        sellingPrice: updatedData.sellingPrice,
+        totalSale: updatedData.totalSale,
+        totalCost: updatedData.totalCost,
+        balance: balance,
+        status: balance <= 0 ? 'Paid' : (amountPaid > 0 ? 'Partial' : 'Pending'),
+        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.error("Error updating credit sale record:", error);
   }
 }
 
 // --- LOAD SALES RECORDS ---
 async function loadSalesRecords(filters = {}) {
   const tbody = document.getElementById('salesRecordsTableBody');
+  if (!tbody) {
+    console.error('Sales records table body not found');
+    return;
+  }
+  
   tbody.innerHTML = '<tr><td colspan="11" class="text-center">Loading...</td></tr>';
 
   try {
     let query = db.collection('sales').orderBy('timestamp', 'desc');
 
+    // Fixed date filtering
     if (filters.fromDate) {
-      const startDate = new Date(filters.fromDate);
-      startDate.setHours(0, 0, 0, 0);
-      query = query.where('date', '>=', startDate);
+      query = query.where('date', '>=', filters.fromDate);
     }
     
     if (filters.toDate) {
-      const endDate = new Date(filters.toDate);
-      endDate.setHours(23, 59, 59, 999);
-      query = query.where('date', '<=', endDate);
+      query = query.where('date', '<=', filters.toDate);
     }
 
     const snapshot = await query.get();
@@ -733,6 +808,7 @@ async function loadSalesRecords(filters = {}) {
     snapshot.docs.forEach(doc => {
       const sale = doc.data();
       
+      // Client name filtering
       if (filters.clientName && !sale.clientName?.toLowerCase().includes(filters.clientName.toLowerCase())) {
         return;
       }
@@ -750,7 +826,7 @@ async function loadSalesRecords(filters = {}) {
         <td>${sale.totalCost?.toFixed(2) || ''}</td>
         <td>${sale.totalSale?.toFixed(2) || ''}</td>
         <td>
-          <button class="btn btn-sm btn-primary edit-btn" data-id="${doc.id}">
+          <button class="btn btn-sm btn-primary edit-btn" onclick="editSale('${doc.id}')">
             <i class="bi bi-pencil"></i> Edit
           </button>
         </td>
@@ -758,18 +834,21 @@ async function loadSalesRecords(filters = {}) {
       tbody.appendChild(tr);
     });
 
-    // Add event listeners for edit buttons
-    tbody.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const saleId = btn.dataset.id;
-        editSale(saleId);
-      });
-    });
-
     function formatDate(dateStr) {
       if (!dateStr) return '';
-      const date = dateStr.toDate ? dateStr.toDate() : new Date(dateStr);
-      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+      
+      // Handle Firestore timestamp
+      if (dateStr.toDate) {
+        return dateStr.toDate().toLocaleDateString() + ' ' + dateStr.toDate().toLocaleTimeString();
+      }
+      
+      // Handle string dates
+      const date = new Date(dateStr);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+      }
+      
+      return dateStr;
     }
 
   } catch (error) {
@@ -781,20 +860,17 @@ async function loadSalesRecords(filters = {}) {
 // --- CALCULATE PROFIT ---
 async function calculateProfit(filters = {}) {
   try {
-    console.log("Calculating profit...");
+    console.log("Calculating profit with filters:", filters);
 
-    let query = db.collection('sales').orderBy('timestamp', 'desc');
+    let query = db.collection('sales');
 
+    // Fixed date filtering
     if (filters.fromDate) {
-      const startDate = new Date(filters.fromDate);
-      startDate.setHours(0, 0, 0, 0);
-      query = query.where('date', '>=', startDate);
+      query = query.where('date', '>=', filters.fromDate);
     }
     
     if (filters.toDate) {
-      const endDate = new Date(filters.toDate);
-      endDate.setHours(23, 59, 59, 999);
-      query = query.where('date', '<=', endDate);
+      query = query.where('date', '<=', filters.toDate);
     }
 
     const salesSnap = await query.get();
@@ -804,25 +880,35 @@ async function calculateProfit(filters = {}) {
 
     salesSnap.forEach(doc => {
       const sale = doc.data();
-      console.log("Processing sale:", sale); // Log each sale
       
       const matchesClient = !filters.clientName || 
                           (sale.clientName && sale.clientName.toLowerCase().includes(filters.clientName.toLowerCase()));
       
       if ((!sale.saleType || sale.saleType === "cash" || sale.saleType === "credit-paid") && matchesClient) {
-        totalSales += sale.totalSale || 0;
-        totalCost += sale.totalCost || 0;
-        totalShipping += sale.shippingCost || 0;
+        totalSales += parseFloat(sale.totalSale) || 0;
+        totalCost += parseFloat(sale.totalCost) || 0;
+        totalShipping += parseFloat(sale.shippingCost) || 0;
       }
     });
 
     const totalProfit = totalSales - totalCost;
-    document.getElementById('totalSales').textContent = totalSales.toFixed(2);
-    document.getElementById('totalCost').textContent = totalCost.toFixed(2);
-    document.getElementById('shippingCostTotal').textContent = totalShipping.toFixed(2);
-    document.getElementById('profit').textContent = totalProfit.toFixed(2);
-    const profitElement = document.getElementById('profit');
-    profitElement.style.color = totalProfit >= 0 ? 'green' : 'red';
+    
+    // Safely update DOM elements
+    const totalSalesEl = document.getElementById('totalSales');
+    const totalCostEl = document.getElementById('totalCost');
+    const shippingCostEl = document.getElementById('shippingCostTotal');
+    const profitEl = document.getElementById('profit');
+    
+    if (totalSalesEl) totalSalesEl.textContent = totalSales.toFixed(2);
+    if (totalCostEl) totalCostEl.textContent = totalCost.toFixed(2);
+    if (shippingCostEl) shippingCostEl.textContent = totalShipping.toFixed(2);
+    if (profitEl) {
+      profitEl.textContent = totalProfit.toFixed(2);
+      profitEl.style.color = totalProfit >= 0 ? 'green' : 'red';
+    }
+    
+    console.log("Profit calculation completed:", { totalSales, totalCost, totalProfit });
+    
   } catch (error) {
     console.error("Error calculating profit:", error);
     alert('Error calculating profit. Check console for details.');
@@ -844,8 +930,10 @@ function playSound(type) {
 
 // --- ON LOAD ---
 window.onload = () => {
-  document.getElementById('saleBarcode')?.focus();
+  const barcodeInput = document.getElementById('saleBarcode');
+  if (barcodeInput) {
+    barcodeInput.focus();
+  }
   loadSalesRecords();
   calculateProfit();
-};          
-
+};
